@@ -1,0 +1,59 @@
+@startuml real-time-event-driven
+!theme vibrant
+skinparam handwritten true
+skinparam backgroundColor White
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam shadowing false
+
+title EpiSense - Arquitetura Orientada a Eventos em Tempo Real
+
+package "Sistema EpiSense" {
+    database "MongoDB" as Mongo {
+        collections "Observações (Bruto)"
+        collections "Agregados Analíticos"
+        collections "Alertas Gerados"
+    }
+
+    component "Barramento de Eventos\n(ex: RabbitMQ)" as EventBus
+
+    frame "Contexto: Mecanismo de Análise" {
+        component "Analysis Engine\n<<Continuous>>" as Engine
+    }
+
+    frame "Contexto: Serviço de Alertas" {
+        component "Alert Service\n<<Subscriber>>" as Alerter
+    }
+}
+
+' Fluxo de Análise
+Engine -> Mongo : 1. Lê/Escreve dados analíticos
+Engine -> EventBus : 2. Publica Evento ('PadraoColetivoDetectado')
+
+' Fluxo de Alerta
+EventBus --> Alerter : 3. Consome Evento
+Alerter -> Mongo : 4. Registra Alerta
+Alerter -> Alerter : 5. Dispara Notificação (via FCM)
+
+
+note top of EventBus
+    **Payload do Evento:**
+    {
+      "TipoPadrao": "QuedaPlaquetas",
+      "Regiao": "Código IBGE 5208707",
+      "JanelaTempo": "2025-09-01T10:00:00Z",
+      "ValorMedio": "130000",
+      "Tendencia": "-15%",
+      "TotalAmostras": 58
+    }
+end note
+
+note right of Alerter
+    **Operação Reativa e Desacoplada**
+    O serviço de alertas reage instantaneamente
+    aos eventos publicados. Se estiver offline,
+    o Barramento de Eventos garante a entrega
+    futura (resiliência).
+end note
+
+@enduml
