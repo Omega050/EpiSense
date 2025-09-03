@@ -1,0 +1,71 @@
+@startuml final-event-driven-architecture
+!theme vibrant
+skinparam handwritten true
+skinparam backgroundColor White
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam shadowing false
+
+title EpiSense - Arquitetura Final (Orientada a Eventos e Serviços Autônomos)
+
+package "Fronteira Externa" #LightGray {
+  component [Servidor FHIR]
+  component [App dos Gestores]
+  component [Serviço de Push (FCM)]
+}
+
+component "Barramento de Eventos\n(Message Broker)" as EventBus
+
+package "Sistema EpiSense" #White {
+    frame "Contexto: API Principal" {
+        component "API Gateway" as API
+    }
+
+    frame "Contexto: Análise de Dados" {
+        component "Analysis Engine\n<<Scheduled>>" as Engine
+        database "Banco de Análise" as AnalysisDB
+    }
+
+    frame "Contexto: Gestão de Alertas" {
+        component "Alert Service\n<<Subscriber>>" as Alerter
+        database "Banco de Alertas" as AlertsDB
+    }
+}
+
+' 1. Ingestão de Dados
+[Servidor FHIR] --> API : Envio de Lotes
+API --> AnalysisDB : 1. Persiste Dados Brutos
+
+' 2. Processo de Análise (Agendado)
+Engine -> AnalysisDB : 2. Lê lotes brutos e\n   escreve agregados
+
+' 3. Publicação de Eventos Ricos
+Engine -> EventBus : 3. Publica evento por padrão detectado\n   ('PadraoColetivoDetectado')
+
+' 4. Geração de Alertas (Reativo)
+EventBus --> Alerter : 4. Consome evento com dados completos
+Alerter -> AlertsDB : 5. Registra Alerta (seu próprio DB)
+Alerter --> [Serviço de Push (FCM)] : 6. Dispara Notificação
+
+' 5. Consulta de Dados
+[App dos Gestores] --> API : 7. Consulta Alertas
+API ..> Alerter : 7a. (via API interna para\n     acessar dados de Alertas)
+
+
+note right of Engine
+    **Dono dos Dados de Análise**
+    Responsável por transformar
+    dados brutos em insights e
+    publicar **eventos ricos**
+    com todo o contexto.
+end note
+
+note right of Alerter
+    **Dono dos Dados de Alerta**
+    Reage a eventos, aplica
+    lógica de notificação e
+    é a única fonte da verdade
+    para os alertas gerados.
+end note
+
+@enduml
