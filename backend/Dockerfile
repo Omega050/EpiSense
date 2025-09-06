@@ -4,12 +4,14 @@ FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
 # copy csproj and restore as distinct layers
-COPY src/EpiSense.Api/EpiSense.Api.csproj src/EpiSense.Api/
-RUN dotnet restore src/EpiSense.Api/EpiSense.Api.csproj
+COPY src/Apps/EpiSense.Api/EpiSense.Api.csproj src/Apps/EpiSense.Api/
+RUN dotnet restore src/Apps/EpiSense.Api/EpiSense.Api.csproj
 
 # copy everything else and build
-COPY src/EpiSense.Api/ src/EpiSense.Api/
-WORKDIR /src/src/EpiSense.Api
+COPY src/Apps/EpiSense.Api/ src/Apps/EpiSense.Api/
+COPY src/Contexts/EpiSense.Analysis/ src/Contexts/EpiSense.Analysis/
+COPY src/Contexts/EpiSense.Alerts/ src/Contexts/EpiSense.Alerts/
+WORKDIR /src/src/Apps/EpiSense.Api
 RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
