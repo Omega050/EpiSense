@@ -1,9 +1,9 @@
 # EpiSense - Architecture Haiku (Versão Aprimorada)
 
 ## Objetivo Principal
-Transformar o fluxo contínuo de hemogramas em **inteligência epidemiológica acionável**, detectando padrões coletivos para antecipar respostas a crises de saúde pública como surtos virais (Dengue), bacterianos ou eventos ambientais.
+Transformar o fluxo contínuo de hemogramas em **inteligência epidemiológica acionável**, detectando padrões coletivos para antecipar respostas a crises de saúde pública como surtos virais, bacterianos ou eventos ambientais.
 
-## Proposta de Valor (O Diferencial)
+## Proposta de Valor
 O poder do EpiSense não está em analisar um único exame, mas em identificar o sinal fraco de uma crise iminente a partir de dados populacionais em tempo real.
 
 * **Sinalização Preditiva:** Ir além do alerta individual para identificar o início de um evento de saúde coletiva.
@@ -24,10 +24,11 @@ O poder do EpiSense não está em analisar um único exame, mas em identificar o
 * Não armazenar dados pessoais identificáveis (PII - Personally Identifiable Information).
 
 ## Atributos de Qualidade
-1.  **Confiabilidade:** A precisão dos alertas é a missão crítica. O sistema deve ser confiável para que as decisões tomadas com base nele sejam seguras.
-2.  **Segurança:** A proteção dos dados de saúde é uma restrição inegociável e, portanto, uma prioridade máxima.
-3.  **Disponibilidade:** A natureza de tempo real do sistema exige que os componentes de recepção e análise estejam sempre operacionais.
+1.  **Segurança:** A proteção dos dados de saúde é uma restrição inegociável e, portanto, uma prioridade máxima.
+2.  **Confiabilidade:** A precisão dos alertas é a missão crítica. O sistema deve ser confiável para que as decisões tomadas com base nele sejam seguras.
+3.  **Reusabilidade:** O sistema deve ser extensível para outros cenários de detecção.
 4.  **Escalabilidade:** A arquitetura deve ser capaz de suportar um volume crescente de exames de múltiplas fontes sem degradação da performance.
+5.  **Disponibilidade:** A natureza de tempo real do sistema exige que os componentes de recepção e análise estejam sempre operacionais.
 
 ## Decisões de Design de Alto Nível
 * **Arquitetura Orientada a Serviços:** Sistema decomposto em serviços especializados e desacoplados (Receptor FHIR, Mecanismo de Análise, Serviço de Alertas) para garantir manutenibilidade e escalabilidade independentes.
