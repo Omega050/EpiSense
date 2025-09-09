@@ -1,0 +1,41 @@
+@startuml modular-monolith
+!theme vibrant
+skinparam handwritten true
+skinparam backgroundColor White
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam shadowing false
+
+title Arquitetura: Monólito Modular
+
+frame "Processo Único de Deploy (Monólito)" {
+    component "API Gateway" as API
+
+    package "Módulo: Análise de Dados" #AliceBlue {
+        component [Analysis Engine]
+        component [Lógica de Persistência\n(Análise)]
+    }
+
+    package "Módulo: Gestão de Alertas" #LightGreen {
+        component [Alert Service]
+        component [Lógica de Persistência\n(Alertas)]
+    }
+
+    component "Mediador / Barramento\n(In-Memory)" as Mediator
+}
+
+' Comunicação Interna (Desacoplada, dentro do mesmo processo)
+[Analysis Engine] ..> Mediator : 1. Publica Evento\n   ('PadraoDetectadoEvent')
+Mediator ..> [Alert Service] : 2. Notifica Assinante
+
+API --> [Analysis Engine]
+API --> [Alert Service]
+
+note as N1
+    **Fronteiras Lógicas, Deploy Físico Único**
+    - Cada módulo é um projeto (.csproj) separado.
+    - Comunicação entre módulos **apenas** via Mediador.
+    - Prepara a migração futura para microsserviços.
+end note
+
+@enduml

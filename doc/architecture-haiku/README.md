@@ -31,7 +31,7 @@ O poder do EpiSense não está em analisar um único exame, mas em identificar o
 5.  **Disponibilidade:** A natureza de tempo real do sistema exige que os componentes de recepção e análise estejam sempre operacionais.
 
 ## Decisões de Design de Alto Nível
-* **Arquitetura Orientada a Serviços:** Sistema decomposto em serviços especializados e desacoplados (Receptor FHIR, Mecanismo de Análise, Serviço de Alertas) para garantir manutenibilidade e escalabilidade independentes.
+* **Arquitetura de Monólito Modular:** O sistema é projetado como um conjunto de **módulos logicamente independentes** (Análise, Alertas, API) dentro de uma **única aplicação implantável (deploy monolítico)**. A comunicação entre os módulos é desacoplada para garantir alta coesão e manutenibilidade.
 * **Plataforma Backend:** Adoção de C# e .NET para alta performance e aproveitamento da maturidade do ecossistema para segurança e integração.
-* **Persistência de Dados:** Uso do MongoDB com seu driver nativo para alinhar o modelo de persistência (documento) com a natureza dos dados (FHIR/JSON) e para alavancar seu poderoso Aggregation Framework nas análises coletivas.
-* **Comunicação Externa:** Exposição dos alertas via API REST para o App Móvel e envio de notificações push através do Firebase Cloud Messaging (FCM).
+* **Persistência de Dados:** Uso do MongoDB com seu driver nativo, aplicando um padrão de **banco de dados por módulo** (lógico) para garantir a autonomia dos dados de cada contexto.
+* **Comunicação Externa:** Exposição de funcionalidades via API REST e envio de notificações push através do Firebase Cloud Messaging (FCM).

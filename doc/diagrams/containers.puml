@@ -1,0 +1,31 @@
+@startuml episense-c4-containers
+!include https://raw.githack.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title "EpiSense — C4 Nível Contêiner (Monólito Modular)"
+
+' Atores/Sistemas externos
+Person(manager, "Gestor de Saúde", "Consulta e recebe alertas epidemiológicos.")
+System_Ext(fhir_server, "Servidor FHIR", "Fonte de dados de hemogramas (FHIR R4).")
+System_Ext(fcm, "Firebase Cloud Messaging", "Notificações push.")
+
+' Limite do sistema
+System_Boundary(episense_system, "Sistema EpiSense") {
+  ' Único contêiner implantável (monólito)
+  Container(monolith, "Aplicação EpiSense", "ASP.NET Core (.NET 8)", "Processo único: expõe API REST, realiza análise e gera alertas. Módulos internos comunicam-se via eventos in-memory (MediatR).")
+
+  ' Armazenamentos (Database per Service lógico)
+  ContainerDb(analysis_db, "Banco de Análise", "MongoDB", "Dados brutos e agregados analíticos.")
+  ContainerDb(alerts_db, "Banco de Alertas", "MongoDB", "Alertas para consulta e auditoria.")
+}
+
+' Relações (fluxos principais)
+Rel(fhir_server, monolith, "Envia lotes de hemogramas", "HTTPS/mTLS")
+Rel(monolith, analysis_db, "Persiste dados brutos e agregados", "")
+Rel(manager, monolith, "Consulta alertas", "HTTPS/REST")
+Rel(monolith, alerts_db, "Grava e lê alertas", "")
+Rel(monolith, fcm, "Dispara notificações", "HTTPS")
+
+' Notas de alinhamento com ADRs
+' - ADR-001/002: .NET 8 + MongoDB (driver nativo)
+' - ADR-003 (revisado): Monólito modular; eventos in-memory via MediatR; Database per Service lógico
+@enduml

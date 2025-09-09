@@ -1,0 +1,36 @@
+@startuml episense-c4-components
+!include https://raw.githack.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+title "EpiSense — C4 Nível Componente (dentro do Monólito Modular)"
+
+' Atores/Sistemas externos (interagem com componentes específicos)
+Person(manager, "Gestor de Saúde", "Consulta alertas.")
+System_Ext(fhir_server, "Servidor FHIR", "Envio de hemogramas (FHIR R4).")
+System_Ext(fcm, "Firebase Cloud Messaging", "Notificações push.")
+
+' Limite do contêiner (aplicação monolítica)
+Container_Boundary(app, "Aplicação EpiSense (.NET 8)") {
+  Component(api, "API REST", "ASP.NET Core Minimal API", "Recebe dados (Observations), expõe endpoints de consulta.")
+  Component(mediator, "Mediador (MediatR)", "Barramento in-memory", "Publicação/assinatura de eventos de domínio (E-CST).")
+  Component(analysis_mod, "Módulo de Análise", "EpiSense.Analysis", "Detecta padrões; publica eventos com estado completo.")
+  Component(alerts_mod, "Módulo de Alertas", "EpiSense.Alerts", "Reage a eventos; cria/atualiza alertas.")
+  ComponentDb(analysis_repo, "Persistência de Análise", "MongoDB (driver C#)", "Database per Service lógico.")
+  ComponentDb(alerts_repo, "Persistência de Alertas", "MongoDB (driver C#)", "Database per Service lógico.")
+}
+
+' Relações externas
+Rel(fhir_server, api, "Envia hemogramas", "HTTPS/mTLS")
+Rel(manager, api, "Consulta alertas", "HTTPS/REST")
+Rel(alerts_mod, fcm, "Dispara notificações", "HTTPS")
+
+' Relações internas
+Rel(api, analysis_mod, "Submete dados para análise", "In-process")
+Rel(analysis_mod, mediator, "Publica eventos (E-CST)", "In-memory")
+Rel_R(mediator, alerts_mod, "Entrega eventos", "In-memory subscription")
+Rel(analysis_mod, analysis_repo, "Grava/agrega dados", "")
+Rel(alerts_mod, alerts_repo, "Persiste alertas", "")
+
+' Notas de alinhamento com ADRs
+' - ADR-001/002: .NET 8 + MongoDB (driver nativo)
+' - ADR-003 (revisado): Mediador in-memory (MediatR), Database per Service lógico, módulos desacoplados
+@enduml

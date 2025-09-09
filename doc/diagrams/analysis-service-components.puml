@@ -1,0 +1,58 @@
+@startuml internal-analysis-service
+!theme vibrant
+allow_mixing
+skinparam handwritten true
+skinparam backgroundColor White
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment left
+skinparam shadowing false
+
+title Componentes Internos - Serviço de Análise
+
+package "Serviço de Análise" {
+
+    component "AnalysisOrchestrator\n<<Scheduled>>" as Orchestrator {
+        class "ExecuteAnalysis()"
+    }
+    
+    interface "IAnalysisRule" as IRule {
+      + Execute(batch) : Finding[]
+    }
+    
+    Orchestrator ..> IRule : uses
+
+    component "PlateletDropRule" as PlateletRule
+    component "LeukocyteSpikeRule" as LeukoRule
+    
+    PlateletRule --|> IRule
+    LeukoRule --|> IRule
+
+    package "Modelo de Domínio" {
+        entity "ObservationBatch" as Batch
+        entity "Hemograma" as Hemo
+        class "EpidemiologicalFinding" as Finding <<Value Object>>
+    }
+
+    Batch "1" *-- "many" Hemo
+
+    Orchestrator ..> Batch : uses
+    IRule ..> Batch : analyzes
+    IRule ..> Finding : produces
+}
+
+package "Infraestrutura" {
+    database "Banco de Análise" as DB
+    component "Barramento de Eventos" as EventBus
+}
+
+Orchestrator ..> DB : (Lê/Escreve)
+Orchestrator ..> EventBus : Publica Eventos
+
+note right of Finding
+    **Objeto rico em contexto:**
+    - Tipo do Achado
+    - Região Geográfica
+    - Dados de Suporte (médias, N)
+    - Severidade
+end note
+@enduml
