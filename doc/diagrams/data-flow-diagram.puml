@@ -1,0 +1,72 @@
+@startuml data-lifecycle
+!theme vibrant
+skinparam handwritten true
+skinparam state {
+    BackgroundColor #AliceBlue
+    BorderColor #1161B2
+}
+skinparam note {
+    BackgroundColor #LightYellow
+    BorderColor #GoldenRod
+}
+
+title Ciclo de Vida do Dado no EpiSense
+
+state "Dado Inicial" as Initial {
+    state "**Formato:** Notificação FHIR (JSON)"
+    note left
+        Recebido pelo **Módulo de Ingestão**.
+        É um dado transitório, ainda não confiável.
+    end note
+}
+
+state "Dado Bruto Armazenado" as Raw {
+    state "**Formato:** Documento Hemograma (BSON)"
+    state "**Persistência:** Coleção `observations` no MongoDB"
+    note right
+        O dado foi validado, parseado e
+        enriquecido. É a nossa fonte da
+        verdade para reanálises futuras.
+    end note
+}
+
+state "Dado Agregado" as Aggregated {
+    state "**Formato:** Documento Analítico (BSON)"
+    state "**Persistência:** Coleção `analytics_aggregates` no MongoDB"
+    note left
+        Resultado do processamento agendado
+        pelo **Módulo de Análise**.
+        Ex: Média de plaquetas para a região X
+        na última hora.
+    end note
+}
+
+state "Evento de Domínio" as Event {
+    state "**Formato:** Objeto em Memória (Evento)"
+    state "**Persistência:** Transitória (Fila do Mediador)"
+    note right
+        Publicado pelo **Módulo de Análise**
+        quando um agregado atinge um limiar.
+        Carrega o estado completo do "achado".
+    end note
+}
+
+state "Alerta Consolidado" as Alert {
+    state "**Formato:** Documento Alerta (BSON)"
+    state "**Persistência:** Coleção `alerts` no MongoDB"
+    note left
+        Criado e gerenciado pelo **Módulo de Alertas**
+        após receber um evento. Possui um ciclo de
+        vida próprio (Ativo, Resolvido, etc.).
+        É o dado servido para o App dos Gestores.
+    end note
+}
+
+
+' Fluxo de transformação
+Initial --> Raw : **Ingestão e Validação**
+Raw --> Aggregated : **Processamento Analítico (Batch)**
+Aggregated --> Event : **Detecção de Padrão**
+Event --> Alert : **Criação do Alerta**
+
+@enduml
