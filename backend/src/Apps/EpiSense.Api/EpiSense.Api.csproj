@@ -9,9 +9,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="8.0.7" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
+    <PackageReference Include="MongoDB.Driver" Version="3.4.3" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Contexts\EpiSense.Analysis\EpiSense.Analysis.csproj" />
     <ProjectReference Include="..\..\Contexts\EpiSense.Alerts\EpiSense.Alerts.csproj" />
+    <ProjectReference Include="..\..\Contexts\EpiSense.Ingestion\EpiSense.Ingestion.csproj" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,160 @@
+{
+  "resourceType": "Observation",
+  "id": "hemograma-test-001",
+  "status": "final",
+  "category": [
+    {
+      "coding": [
+        {
+          "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+          "code": "laboratory",
+          "display": "Laboratory"
+        }
+      ]
+    }
+  ],
+  "code": {
+    "coding": [
+      {
+        "system": "http://loinc.org",
+        "code": "58410-2",
+        "display": "CBC panel - Blood by Automated count"
+      }
+    ],
+    "text": "Complete Blood Count"
+  },
+  "subject": {
+    "reference": "Patient/patient-001",
+    "display": "João da Silva"
+  },
+  "effectiveDateTime": "2025-09-12T08:30:00Z",
+  "issued": "2025-09-12T10:15:00Z",
+  "performer": [
+    {
+      "reference": "Organization/lab-central-sp",
+      "display": "Laboratório Central SP"
+    }
+  ],
+  "component": [
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "http://loinc.org",
+            "code": "6690-2",
+            "display": "Leukocytes [#/volume] in Blood by Automated count"
+          }
+        ]
+      },
+      "valueQuantity": {
+        "value": 12500,
+        "unit": "cells/μL",
+        "system": "http://unitsofmeasure.org",
+        "code": "/uL"
+      },
+      "interpretation": [
+        {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+              "code": "H",
+              "display": "High"
+            }
+          ]
+        }
+      ],
+      "referenceRange": [
+        {
+          "low": {
+            "value": 4000,
+            "unit": "cells/μL"
+          },
+          "high": {
+            "value": 11000,
+            "unit": "cells/μL"
+          }
+        }
+      ]
+    },
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "http://loinc.org",
+            "code": "777-3",
+            "display": "Platelets [#/volume] in Blood by Automated count"
+          }
+        ]
+      },
+      "valueQuantity": {
+        "value": 95000,
+        "unit": "platelets/μL",
+        "system": "http://unitsofmeasure.org",
+        "code": "/uL"
+      },
+      "interpretation": [
+        {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+              "code": "L",
+              "display": "Low"
+            }
+          ]
+        }
+      ],
+      "referenceRange": [
+        {
+          "low": {
+            "value": 150000,
+            "unit": "platelets/μL"
+          },
+          "high": {
+            "value": 450000,
+            "unit": "platelets/μL"
+          }
+        }
+      ]
+    },
+    {
+      "code": {
+        "coding": [
+          {
+            "system": "http://loinc.org",
+            "code": "718-7",
+            "display": "Hemoglobin [Mass/volume] in Blood"
+          }
+        ]
+      },
+      "valueQuantity": {
+        "value": 11.8,
+        "unit": "g/dL",
+        "system": "http://unitsofmeasure.org",
+        "code": "g/dL"
+      },
+      "interpretation": [
+        {
+          "coding": [
+            {
+              "system": "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+              "code": "L",
+              "display": "Low"
+            }
+          ]
+        }
+      ],
+      "referenceRange": [
+        {
+          "low": {
+            "value": 12.0,
+            "unit": "g/dL"
+          },
+          "high": {
+            "value": 16.0,
+            "unit": "g/dL"
+          }
+        }
+      ]
+    }
+  ]
+}
