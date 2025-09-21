@@ -9,10 +9,12 @@ A separação lógica dos domínios (`Análise`, `Alertas`) é necessária, por�
 Adotar **Monólito Modular**: um único processo .NET, estruturado em módulos com fronteiras claras. Comunicação interna via mediador/barramento in-memory (ver ADR 003). Cada módulo é dono lógico de sua persistência.
 
 **Alternativas Consideradas:**
+
 - Microsserviços Distribuídos: descartado (overhead operacional precoce).
 - Monólito Tradicional (sem fronteiras): descartado (risco de acoplamento crescente e perda de manutenibilidade).
 
 **Consequências:**
+
 - Positivas:
   - Simplicidade operacional (deploy, observabilidade, scaling únicos).
   - Base preparada para futura extração seletiva.

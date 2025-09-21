@@ -12,9 +12,10 @@ A pasta `architecture-decision-records` registra as principais decisões arquite
 
 | ADR Id | Descrição | Status |
 |-------:|-----------|--------|
-| [`adr-001`](architectural-decision-records/adr-001-adocao-de-csharp-e-dotnet.md) | Adoção de C# e .NET 8 para os serviços de backend. | Proposta |
-| [`adr-002`](architectural-decision-records/adr-002-uso-de-mongodb-com-driver-nativo.md) | Uso de MongoDB com o driver nativo oficial em C# para persistência (sem ORM). | Proposta |
-| [`adr-003`](architectural-decision-records/adr-004-servicos-autonomos-com-comunicacao-orientada-a-eventos.md) | Serviços autônomos com comunicação orientada a eventos e Database per Service. | Proposta |
+| [`adr-001`](architecture-decision-records\adr-001-adocao-de-csharp-e-dotnet.md) | Adoção de C# e .NET 8 para os serviços de backend. | Proposta |
+| [`adr-002`](architecture-decision-records\adr-002-uso-de-mongodb-com-driver-nativo.md) | Uso de MongoDB com o driver nativo oficial em C# para persistência (sem ORM). | Proposta |
+| [`adr-003`](architecture-decision-records\adr-003-servicos-autonomos-com-comunicacao-orientada-a-eventos.md) | Serviços autônomos com comunicação orientada a eventos e Database per Service. | Proposta |
+| [`adr-004`](architecture-decision-records\adr-004-adocao-de-arquitetura-de-monolito-modular.md) | Adoção de Arquitetura de Monólito Modular | Proposta |
 
 ## Diagramas
 
@@ -23,4 +24,3 @@ A pasta `diagrams` contém esboços PlantUML (por exemplo, visões de componente
 ---
 
 Manter este documento atualizado garante que todas as partes interessadas acompanhem as principais decisões e a evolução da arquitetura ao longo do tempo.
-
