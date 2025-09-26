@@ -16,6 +16,7 @@ A pasta `architecture-decision-records` registra as principais decisões arquite
 | [`adr-002`](architecture-decision-records\adr-002-uso-de-mongodb-com-driver-nativo.md) | Uso de MongoDB com o driver nativo oficial em C# para persistência (sem ORM). | Proposta |
 | [`adr-003`](architecture-decision-records\adr-003-servicos-autonomos-com-comunicacao-orientada-a-eventos.md) | Serviços autônomos com comunicação orientada a eventos e Database per Service. | Proposta |
 | [`adr-004`](architecture-decision-records\adr-004-adocao-de-arquitetura-de-monolito-modular.md) | Adoção de Arquitetura de Monólito Modular | Proposta |
+| [`adr-005`](architecture-decision-records\adr-005-validacao-fhir-no-nivel-de-api.md) | Validação FHIR no nível de API com feedback imediato ao cliente | Aceito |
 
 ## Diagramas
 
