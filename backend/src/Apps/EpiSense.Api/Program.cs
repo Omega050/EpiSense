@@ -10,8 +10,6 @@ builder.Services.Configure<MongoDbSettings>(
 
 // Serviços de Ingestão
 builder.Services.AddScoped<IIngestionRepository, MongoIngestionRepository>();
-builder.Services.AddScoped<IDataSource, TestDataSource>();
-builder.Services.AddScoped<TestDataSource>();
 builder.Services.AddScoped<IEventPublisher, ConsoleEventPublisher>();
 builder.Services.AddScoped<IngestionService>();
 

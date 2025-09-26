@@ -1,3 +1,4 @@
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace EpiSense.Ingestion.Domain.ValueObjects;
@@ -20,6 +21,7 @@ public class IngestionMetadata
     public DateTime? ProcessedAt { get; set; }
     
     [BsonElement("status")]
+    [BsonRepresentation(BsonType.String)]
     public IngestionStatus Status { get; set; } = IngestionStatus.Received;
     
     [BsonElement("errorMessage")]

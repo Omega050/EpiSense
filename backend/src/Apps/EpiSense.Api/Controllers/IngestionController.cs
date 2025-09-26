@@ -3,6 +3,9 @@ using EpiSense.Ingestion.Services;
 using EpiSense.Ingestion.Domain;
 using EpiSense.Ingestion.Domain.ValueObjects;
 using EpiSense.Ingestion.Infrastructure;
+using EpiSense.Api.DTOs;
+using EpiSense.Api.Extensions;
+using System.Text.Json;
 
 namespace EpiSense.Api.Controllers;
 
@@ -12,18 +15,15 @@ public class IngestionController : ControllerBase
 {
     private readonly IngestionService _ingestionService;
     private readonly IIngestionRepository _repository;
-    private readonly TestDataSource _testDataSource;
     private readonly ILogger<IngestionController> _logger;
 
     public IngestionController(
         IngestionService ingestionService,
         IIngestionRepository repository,
-        TestDataSource testDataSource,
         ILogger<IngestionController> logger)
     {
         _ingestionService = ingestionService;
         _repository = repository;
-        _testDataSource = testDataSource;
         _logger = logger;
     }
 
@@ -32,10 +32,7 @@ public class IngestionController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("📥 Receiving FHIR data for ingestion test");
-
-            // Adiciona os dados ao data source de teste
-            await _testDataSource.AddTestDataAsync(request.FhirJson);
+            _logger.LogInformation("📥 Receiving FHIR data for ingestion test (String format)");
 
             // Cria objeto RawHealthData
             var rawData = new RawHealthData
@@ -43,7 +40,7 @@ public class IngestionController : ControllerBase
                 RawJson = request.FhirJson,
                 IngestionMetadata = new IngestionMetadata
                 {
-                    SourceSystem = "API-Test",
+                    SourceSystem = "API-Test-String",
                     SourceUrl = Request.Path,
                     Status = IngestionStatus.Received,
                     ReceivedAt = DateTime.UtcNow
@@ -61,12 +58,80 @@ public class IngestionController : ControllerBase
                 DataId = rawData.Id,
                 Status = rawData.IngestionMetadata.Status.ToString(),
                 ReceivedAt = rawData.IngestionMetadata.ReceivedAt,
-                Message = "Data successfully ingested for testing"
+                Message = "Data successfully ingested for testing (String format)",
+                Format = "JSON String"
             });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "❌ Error during data ingestion test");
+            return StatusCode(500, new
+            {
+                Success = false,
+                Error = ex.Message
+            });
+        }
+    }
+
+    [HttpPost("observation")]
+    public async Task<IActionResult> IngestFhirObservation([FromBody] FhirObservationRequest observation)
+    {
+        try
+        {
+            _logger.LogInformation("📥 Receiving FHIR Observation for ingestion (Object format)");
+
+            // Valida o objeto FHIR
+            if (!observation.IsValid(out var validationErrors))
+            {
+                _logger.LogWarning("❌ FHIR Observation validation failed: {Errors}", string.Join(", ", validationErrors));
+                return BadRequest(new
+                {
+                    Success = false,
+                    Error = "FHIR Observation validation failed",
+                    ValidationErrors = validationErrors
+                });
+            }
+
+            // Converte o objeto para JSON string para compatibilidade com sistema atual
+            var jsonString = observation.ToJsonString();
+
+            // Cria objeto RawHealthData com dados FHIR estruturados
+            var rawData = new RawHealthData
+            {
+                RawJson = jsonString,
+                FhirObservation = observation.ToFhirObservationData(),
+                IngestionMetadata = new IngestionMetadata
+                {
+                    SourceSystem = "API-Object",
+                    SourceUrl = Request.Path,
+                    Status = IngestionStatus.Validated, // Já foi validado
+                    ReceivedAt = DateTime.UtcNow,
+                    ValidationRules = new List<string> { "fhir-observation-structure", "required-fields", "data-types" }
+                }
+            };
+
+            // Salva no MongoDB
+            await _repository.SaveRawDataAsync(rawData);
+
+            _logger.LogInformation("✅ FHIR Observation ingested successfully with ID: {DataId}", rawData.Id);
+
+            return Ok(new
+            {
+                Success = true,
+                DataId = rawData.Id,
+                Status = rawData.IngestionMetadata.Status.ToString(),
+                ReceivedAt = rawData.IngestionMetadata.ReceivedAt,
+                Message = "FHIR Observation successfully ingested and validated (Object format)",
+                Format = "FHIR Object",
+                ObservationId = observation.Id,
+                ResourceType = observation.ResourceType,
+                ComponentCount = observation.Component?.Count ?? 0,
+                ValidationPassed = true
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "❌ Error during FHIR Observation ingestion");
             return StatusCode(500, new
             {
                 Success = false,
