@@ -14,8 +14,31 @@ services:
     networks:
       - episense-network
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: episense-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: episense_analysis
+      POSTGRES_USER: episense
+      POSTGRES_PASSWORD: episense_dev_pass
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker-init/init-postgres.sql:/docker-entrypoint-initdb.d/init-postgres.sql
+    networks:
+      - episense-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U episense -d episense_analysis"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   mongodb_data:
+    driver: local
+  postgres_data:
     driver: local
 
 networks:
