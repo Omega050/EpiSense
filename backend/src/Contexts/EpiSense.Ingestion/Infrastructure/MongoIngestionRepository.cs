@@ -1,6 +1,5 @@
 using MongoDB.Driver;
 using EpiSense.Ingestion.Domain;
-using EpiSense.Ingestion.Domain.ValueObjects;
 using Microsoft.Extensions.Options;
 
 namespace EpiSense.Ingestion.Infrastructure;
@@ -20,7 +19,6 @@ public class MongoIngestionRepository : IIngestionRepository
 
     public async Task SaveRawDataAsync(RawHealthData data)
     {
-        data.UpdatedAt = DateTime.UtcNow;
         await _collection.InsertOneAsync(data);
     }
 
@@ -34,17 +32,11 @@ public class MongoIngestionRepository : IIngestionRepository
     public async Task UpdateStatusAsync(string id, IngestionStatus status, string? errorMessage = null)
     {
         var update = Builders<RawHealthData>.Update
-            .Set(x => x.IngestionMetadata.Status, status)
-            .Set(x => x.UpdatedAt, DateTime.UtcNow);
+            .Set(x => x.Status, status);
 
         if (!string.IsNullOrEmpty(errorMessage))
         {
-            update = update.Set(x => x.IngestionMetadata.ErrorMessage, errorMessage);
-        }
-
-        if (status == IngestionStatus.Processed)
-        {
-            update = update.Set(x => x.IngestionMetadata.ProcessedAt, DateTime.UtcNow);
+            update = update.Set(x => x.ErrorMessage, errorMessage);
         }
 
         await _collection.UpdateOneAsync(
@@ -55,14 +47,14 @@ public class MongoIngestionRepository : IIngestionRepository
     public async Task<IEnumerable<RawHealthData>> GetDataByStatusAsync(IngestionStatus status)
     {
         return await _collection
-            .Find(x => x.IngestionMetadata.Status == status)
+            .Find(x => x.Status == status)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<RawHealthData>> GetDataByDateRangeAsync(DateTime startDate, DateTime endDate)
     {
         return await _collection
-            .Find(x => x.CreatedAt >= startDate && x.CreatedAt <= endDate)
+            .Find(x => x.ReceivedAt >= startDate && x.ReceivedAt <= endDate)
             .ToListAsync();
     }
 }

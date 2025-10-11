@@ -1,5 +1,4 @@
 using EpiSense.Ingestion.Domain;
-using EpiSense.Ingestion.Domain.ValueObjects;
 
 namespace EpiSense.Ingestion.Infrastructure;
 

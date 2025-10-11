@@ -1,21 +1,17 @@
 using EpiSense.Ingestion.Domain;
-using EpiSense.Ingestion.Domain.ValueObjects;
 using EpiSense.Ingestion.Infrastructure;
 
 namespace EpiSense.Ingestion.Services;
 
 public class IngestionService
 {
-    private readonly IDataSource _dataSource;
     private readonly IIngestionRepository _repository;
     private readonly IEventPublisher _eventPublisher;
 
     public IngestionService(
-        IDataSource dataSource,
         IIngestionRepository repository,
         IEventPublisher eventPublisher)
     {
-        _dataSource = dataSource;
         _repository = repository;
         _eventPublisher = eventPublisher;
     }

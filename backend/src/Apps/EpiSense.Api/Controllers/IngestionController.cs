@@ -1,10 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using EpiSense.Ingestion.Services;
 using EpiSense.Ingestion.Domain;
-using EpiSense.Ingestion.Domain.ValueObjects;
 using EpiSense.Ingestion.Infrastructure;
-using EpiSense.Api.DTOs;
-using EpiSense.Api.Extensions;
 using System.Text.Json;
 
 namespace EpiSense.Api.Controllers;
@@ -15,16 +12,13 @@ public class IngestionController : ControllerBase
 {
     private readonly IngestionService _ingestionService;
     private readonly IIngestionRepository _repository;
-    private readonly ILogger<IngestionController> _logger;
 
     public IngestionController(
         IngestionService ingestionService,
-        IIngestionRepository repository,
-        ILogger<IngestionController> logger)
+        IIngestionRepository repository)
     {
         _ingestionService = ingestionService;
         _repository = repository;
-        _logger = logger;
     }
 
     [HttpPost("test")]
@@ -32,39 +26,41 @@ public class IngestionController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("📥 Receiving FHIR data for ingestion test (String format)");
+            // Validação básica do JSON
+            if (string.IsNullOrWhiteSpace(request.FhirJson))
+            {
+                return BadRequest(new
+                {
+                    Success = false,
+                    Error = "FhirJson cannot be empty"
+                });
+            }
 
-            // Cria objeto RawHealthData
+            // Cria objeto RawHealthData simplificado
             var rawData = new RawHealthData
             {
                 RawJson = request.FhirJson,
-                IngestionMetadata = new IngestionMetadata
-                {
-                    SourceSystem = "API-Test-String",
-                    SourceUrl = Request.Path,
-                    Status = IngestionStatus.Received,
-                    ReceivedAt = DateTime.UtcNow
-                }
+                SourceSystem = "API-Test",
+                SourceUrl = Request.Path,
+                Status = IngestionStatus.Received,
+                ReceivedAt = DateTime.UtcNow
             };
 
             // Salva no MongoDB
             await _repository.SaveRawDataAsync(rawData);
 
-            _logger.LogInformation("✅ Data ingested successfully with ID: {DataId}", rawData.Id);
-
             return Ok(new
             {
                 Success = true,
                 DataId = rawData.Id,
-                Status = rawData.IngestionMetadata.Status.ToString(),
-                ReceivedAt = rawData.IngestionMetadata.ReceivedAt,
-                Message = "Data successfully ingested for testing (String format)",
-                Format = "JSON String"
+                Status = rawData.Status.ToString(),
+                ReceivedAt = rawData.ReceivedAt,
+                Message = "Data successfully ingested",
+                SourceSystem = rawData.SourceSystem
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Error during data ingestion test");
             return StatusCode(500, new
             {
                 Success = false,
@@ -74,64 +70,48 @@ public class IngestionController : ControllerBase
     }
 
     [HttpPost("observation")]
-    public async Task<IActionResult> IngestFhirObservation([FromBody] FhirObservationRequest observation)
+    public async Task<IActionResult> IngestFhirObservation([FromBody] JsonElement observationJson)
     {
         try
         {
-            _logger.LogInformation("📥 Receiving FHIR Observation for ingestion (Object format)");
+            // Converte o JsonElement para string
+            var jsonString = observationJson.GetRawText();
 
-            // Valida o objeto FHIR
-            if (!observation.IsValid(out var validationErrors))
+            // Validação básica do JSON
+            if (string.IsNullOrWhiteSpace(jsonString) || jsonString == "null")
             {
-                _logger.LogWarning("❌ FHIR Observation validation failed: {Errors}", string.Join(", ", validationErrors));
                 return BadRequest(new
                 {
                     Success = false,
-                    Error = "FHIR Observation validation failed",
-                    ValidationErrors = validationErrors
+                    Error = "Observation JSON cannot be empty"
                 });
             }
 
-            // Converte o objeto para JSON string para compatibilidade com sistema atual
-            var jsonString = observation.ToJsonString();
-
-            // Cria objeto RawHealthData com dados FHIR estruturados
+            // Cria objeto RawHealthData simplificado
             var rawData = new RawHealthData
             {
                 RawJson = jsonString,
-                FhirObservation = observation.ToFhirObservationData(),
-                IngestionMetadata = new IngestionMetadata
-                {
-                    SourceSystem = "API-Object",
-                    SourceUrl = Request.Path,
-                    Status = IngestionStatus.Validated, // Já foi validado
-                    ReceivedAt = DateTime.UtcNow,
-                    ValidationRules = new List<string> { "fhir-observation-structure", "required-fields", "data-types" }
-                }
+                SourceSystem = "API-Object",
+                SourceUrl = Request.Path,
+                Status = IngestionStatus.Received,
+                ReceivedAt = DateTime.UtcNow
             };
 
             // Salva no MongoDB
             await _repository.SaveRawDataAsync(rawData);
 
-            _logger.LogInformation("✅ FHIR Observation ingested successfully with ID: {DataId}", rawData.Id);
-
             return Ok(new
             {
                 Success = true,
                 DataId = rawData.Id,
-                Status = rawData.IngestionMetadata.Status.ToString(),
-                ReceivedAt = rawData.IngestionMetadata.ReceivedAt,
-                Message = "FHIR Observation successfully ingested and validated (Object format)",
-                Format = "FHIR Object",
-                ObservationId = observation.Id,
-                ResourceType = observation.ResourceType,
-                ComponentCount = observation.Component?.Count ?? 0,
-                ValidationPassed = true
+                Status = rawData.Status.ToString(),
+                ReceivedAt = rawData.ReceivedAt,
+                Message = "FHIR Observation successfully ingested (Object format)",
+                SourceSystem = rawData.SourceSystem
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Error during FHIR Observation ingestion");
             return StatusCode(500, new
             {
                 Success = false,
@@ -155,19 +135,16 @@ public class IngestionController : ControllerBase
             return Ok(new
             {
                 DataId = data.Id,
-                Status = data.IngestionMetadata.Status.ToString(),
-                ReceivedAt = data.IngestionMetadata.ReceivedAt,
-                ProcessedAt = data.IngestionMetadata.ProcessedAt,
-                ErrorMessage = data.IngestionMetadata.ErrorMessage,
-                RetryCount = data.IngestionMetadata.RetryCount,
-                SourceSystem = data.IngestionMetadata.SourceSystem,
-                HasFhirData = data.FhirObservation != null,
+                Status = data.Status.ToString(),
+                ReceivedAt = data.ReceivedAt,
+                ErrorMessage = data.ErrorMessage,
+                SourceSystem = data.SourceSystem,
+                SourceUrl = data.SourceUrl,
                 RawDataSize = data.RawJson?.Length ?? 0
             });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Error retrieving ingestion status for {DataId}", dataId);
             return StatusCode(500, new { Error = ex.Message });
         }
     }
@@ -193,11 +170,10 @@ public class IngestionController : ControllerBase
             var result = data.Select(d => new
             {
                 DataId = d.Id,
-                Status = d.IngestionMetadata.Status.ToString(),
-                ReceivedAt = d.IngestionMetadata.ReceivedAt,
-                ProcessedAt = d.IngestionMetadata.ProcessedAt,
-                SourceSystem = d.IngestionMetadata.SourceSystem,
-                HasError = !string.IsNullOrEmpty(d.IngestionMetadata.ErrorMessage)
+                Status = d.Status.ToString(),
+                ReceivedAt = d.ReceivedAt,
+                SourceSystem = d.SourceSystem,
+                HasError = !string.IsNullOrEmpty(d.ErrorMessage)
             });
 
             return Ok(new
@@ -208,7 +184,6 @@ public class IngestionController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Error retrieving ingestion statuses");
             return StatusCode(500, new { Error = ex.Message });
         }
     }
@@ -218,7 +193,6 @@ public class IngestionController : ControllerBase
     {
         try
         {
-            _logger.LogInformation("🔄 Starting manual processing of pending data");
             
             await _ingestionService.ProcessIncomingDataAsync();
             
@@ -230,7 +204,6 @@ public class IngestionController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "❌ Error during manual processing");
             return StatusCode(500, new { Error = ex.Message });
         }
     }
