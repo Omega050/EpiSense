@@ -1,6 +1,6 @@
 # ADR 002: Uso do MongoDB com Driver Nativo para Persistência
 
-**Status:** Proposta
+**Status:** Desatualizado (Substituído pela ADR-006)
 
 **Contexto:**
 O projeto EpiSense precisa de um banco de dados para armazenar os hemogramas recebidos (recursos FHIR `Observation`) e os alertas gerados. O sistema necessita realizar análises complexas em janelas de tempo deslizantes para detectar padrões coletivos. A flexibilidade do esquema é desejável, já que o padrão FHIR é baseado em documentos JSON. A decisão precisava ser validada no Marco 3.
@@ -22,6 +22,16 @@ Adotaremos o **MongoDB** como nosso banco de dados principal. O acesso ao banco 
 3. **Poder Analítico:** O uso do driver nativo nos dá acesso total ao Aggregation Framework do MongoDB, ideal para implementar as análises em janela deslizante de forma eficiente e performática.
 4. **Produtividade Balanceada:** O driver permite usar LINQ para consultas simples (modo ODM) e o Aggregation Framework para as complexas, oferecendo um ótimo balanço entre produtividade e poder.
 
-**Negativas:**
+* **Negativas:**
 
 * **Menor Rigidez Transacional:** O modelo do MongoDB tem garantias transacionais diferentes de um banco SQL tradicional. Para o caso de uso do EpiSense, que consiste majoritariamente em escrita e leitura de dados analíticos, isso não é considerado um impeditivo.
+
+---
+
+**Nota sobre Substituição:**
+
+Esta decisão foi **substituída pela ADR-006** que adota uma arquitetura híbrida de persistência. Durante a evolução do projeto, identificou-se que uma abordagem de persistência polígota (MongoDB + PostgreSQL) seria mais adequada:
+- **MongoDB** permanece para dados brutos FHIR (conforme esta ADR)
+- **PostgreSQL** foi adicionado para dados analisados estruturados e consultas epidemiológicas complexas
+
+A justificativa original desta ADR sobre usar MongoDB com driver nativo para dados FHIR permanece válida e foi incorporada na ADR-006.

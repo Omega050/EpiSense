@@ -1,6 +1,6 @@
 # ADR 004: Adoção de Arquitetura de Monólito Modular
 
-**Status:** Proposta
+**Status:** Aceito
 
 **Contexto:**
 A separação lógica dos domínios (`Análise`, `Alertas`) é necessária, porém operar múltiplos microsserviços agora adicionaria complexidade desproporcional (infra, observabilidade, rede) para a fase atual.

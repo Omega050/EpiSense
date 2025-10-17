@@ -12,12 +12,15 @@ A pasta `architecture-decision-records` registra as principais decisões arquite
 
 | ADR Id | Descrição | Status |
 |-------:|-----------|--------|
-| [`adr-001`](architecture-decision-records\adr-001-adocao-de-csharp-e-dotnet.md) | Adoção de C# e .NET 8 para os serviços de backend. | Proposta |
-| [`adr-002`](architecture-decision-records\adr-002-uso-de-mongodb-com-driver-nativo.md) | Uso de MongoDB com o driver nativo oficial em C# para persistência (sem ORM). | Proposta |
-| [`adr-003`](architecture-decision-records\adr-003-servicos-autonomos-com-comunicacao-orientada-a-eventos.md) | Serviços autônomos com comunicação orientada a eventos e Database per Service. | Proposta |
-| [`adr-004`](architecture-decision-records\adr-004-adocao-de-arquitetura-de-monolito-modular.md) | Adoção de Arquitetura de Monólito Modular | Proposta |
+| [`adr-001`](architecture-decision-records\adr-001-adocao-de-csharp-e-dotnet.md) | Adoção de C# e .NET 8 para os serviços de backend. | Aceito |
+| [`adr-002`](architecture-decision-records\adr-002-uso-de-mongodb-com-driver-nativo.md) | Uso de MongoDB com o driver nativo oficial em C# para persistência (sem ORM). | Substituída |
+| [`adr-003`](architecture-decision-records\adr-003-servicos-autonomos-com-comunicacao-orientada-a-eventos.md) | Serviços autônomos com comunicação orientada a eventos e Database per Service. | Pendente |
+| [`adr-004`](architecture-decision-records\adr-004-adocao-de-arquitetura-de-monolito-modular.md) | Adoção de Arquitetura de Monólito Modular | Aceito |
 | [`adr-005`](architecture-decision-records\adr-005-validacao-fhir-no-nivel-de-api.md) | Validação FHIR no nível de API com feedback imediato ao cliente | Aceito |
-| [`adr-006`](architecture-decision-records\adr-006-arquitetura-hibrida-persistencia-mongodb-postgresql.md) | Arquitetura Híbrida de Persistência com MongoDB e PostgreSQL | Proposta |
+| [`adr-006`](architecture-decision-records\adr-006-arquitetura-hibrida-persistencia-mongodb-postgresql.md) | Arquitetura Híbrida de Persistência com MongoDB e PostgreSQL | Aceito |
+| [`adr-007`](architecture-decision-records\adr-007-padrao-repository-especifico-por-contexto.md) | Padrão Repository específico por contexto sem abstração genérica | Aceito |
+| [`adr-008`](architecture-decision-records\adr-008-comunicacao-inter-modulos-via-callback.md) | Comunicação inter-módulos via Callback Pattern (estratégia transitória) | Aceito |
+| [`adr-009`](architecture-decision-records\adr-009-resiliencia-postgresql-retry-policy.md) | Resiliência de conexão PostgreSQL com Retry Policy | Aceito |
 
 ## Diagramas
 

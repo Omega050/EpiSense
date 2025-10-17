@@ -1,6 +1,6 @@
 # ADR 003: Adoção de Serviços Autônomos com Comunicação via Eventos In-Memory
 
-**Status:** Proposta
+**Status:** Pendente
 
 **Contexto:**
 Após a decisão de arquitetura de **Monólito Modular** (ver ADR 004), os módulos (`Análise`, `Alertas`) precisam permanecer desacoplados logicamente. Chamada direta entre módulos (método → método) criaria acoplamento estrutural e dificultaria futura extração seletiva.
@@ -27,3 +27,7 @@ Após a decisão de arquitetura de **Monólito Modular** (ver ADR 004), os módu
 - Negativas:
   - Sem durabilidade de eventos fora do processo (falha derruba o fluxo).
   - Necessidade de disciplina para manter contratos de eventos versionados.
+
+**Justificativa do Status Pendente:**
+
+A implementação de comunicação event-driven ainda não foi realizada para evitar o escalonamento da complexidade do projeto nesta fase inicial. Atualmente, a comunicação entre os módulos de Ingestion e Analysis é feita através de callbacks diretos, o que permite validar o fluxo de dados e as regras de negócio antes de introduzir a camada adicional de abstração que a arquitetura orientada a eventos demanda. Esta decisão será reavaliada quando o sistema estiver estabilizado e houver necessidade clara de maior desacoplamento entre os módulos.

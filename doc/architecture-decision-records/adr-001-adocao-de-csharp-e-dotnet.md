@@ -1,6 +1,6 @@
 # ADR 001: Adoção de C# e .NET para o Backend
 
-**Status:** Proposta
+**Status:** Aceito
 
 **Contexto:**
 O projeto EpiSense necessita de uma plataforma de backend robusta para implementar a recepção de mensagens FHIR, o processamento analítico dos dados e a exposição de uma API REST. A plataforma escolhida deve ser performática, segura e ter um ecossistema maduro para lidar com as demandas de um sistema de saúde em tempo real. A equipe de desenvolvimento possui experiência prévia com tecnologias Microsoft.

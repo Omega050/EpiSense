@@ -1,9 +1,13 @@
 # ADR 006: Arquitetura Híbrida de Persistência com MongoDB e PostgreSQL
 
-**Status:** Implementado
+**Status:** Aceito
+
+**Supersede:** ADR-002
 
 **Contexto:**
 Durante a evolução do projeto EpiSense, identificamos que diferentes tipos de dados possuem requisitos distintos de persistência. Os dados brutos FHIR precisam de flexibilidade de schema para suportar a variabilidade dos recursos FHIR, enquanto os dados analisados e resumos clínicos necessitam de estrutura relacional otimizada para consultas analíticas complexas e detecção de surtos epidemiológicos.
+
+Esta decisão substitui a **ADR-002**, que propunha usar apenas MongoDB. A decisão evoluiu para uma abordagem de persistência polígota mais adequada às diferentes necessidades dos módulos do sistema.
 
 **Decisão:**
 Adotaremos uma **arquitetura híbrida de persistência** utilizando:
