@@ -32,11 +32,11 @@ public class MongoIngestionRepository : IIngestionRepository
     public async Task UpdateStatusAsync(string id, IngestionStatus status, string? errorMessage = null)
     {
         var update = Builders<RawHealthData>.Update
-            .Set(x => x.Status, status);
+            .Set("metadata.status", status);
 
         if (!string.IsNullOrEmpty(errorMessage))
         {
-            update = update.Set(x => x.ErrorMessage, errorMessage);
+            update = update.Set("metadata.errorMessage", errorMessage);
         }
 
         await _collection.UpdateOneAsync(
@@ -44,17 +44,24 @@ public class MongoIngestionRepository : IIngestionRepository
             update);
     }
 
+    public async Task UpdateRawDataAsync(RawHealthData data)
+    {
+        await _collection.ReplaceOneAsync(
+            x => x.Id == data.Id,
+            data);
+    }
+
     public async Task<IEnumerable<RawHealthData>> GetDataByStatusAsync(IngestionStatus status)
     {
         return await _collection
-            .Find(x => x.Status == status)
+            .Find(x => x.Metadata.Status == status)
             .ToListAsync();
     }
 
     public async Task<IEnumerable<RawHealthData>> GetDataByDateRangeAsync(DateTime startDate, DateTime endDate)
     {
         return await _collection
-            .Find(x => x.ReceivedAt >= startDate && x.ReceivedAt <= endDate)
+            .Find(x => x.Metadata.ReceivedAt >= startDate && x.Metadata.ReceivedAt <= endDate)
             .ToListAsync();
     }
 }

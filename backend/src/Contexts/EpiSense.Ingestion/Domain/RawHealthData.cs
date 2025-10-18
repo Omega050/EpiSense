@@ -5,7 +5,7 @@ namespace EpiSense.Ingestion.Domain;
 
 /// <summary>
 /// Representa dados FHIR brutos armazenados durante a ingestão.
-/// Mantém apenas o JSON original e metadados mínimos para rastreamento.
+/// Armazena o JSON FHIR como documento BSON nativo para consultas flexíveis.
 /// </summary>
 [BsonCollection("raw_health_data")]
 public class RawHealthData
@@ -15,11 +15,23 @@ public class RawHealthData
     public string Id { get; set; } = ObjectId.GenerateNewId().ToString();
     
     /// <summary>
-    /// JSON FHIR original recebido (sem processamento)
+    /// Documento FHIR original como BSON (permite consultas diretas nos campos)
     /// </summary>
-    [BsonElement("rawJson")]
-    public string RawJson { get; set; } = string.Empty;
+    [BsonElement("fhirData")]
+    public BsonDocument FhirData { get; set; } = new BsonDocument();
     
+    /// <summary>
+    /// Metadados de ingestão
+    /// </summary>
+    [BsonElement("metadata")]
+    public IngestionMetadata Metadata { get; set; } = new IngestionMetadata();
+}
+
+/// <summary>
+/// Metadados sobre o processo de ingestão
+/// </summary>
+public class IngestionMetadata
+{
     /// <summary>
     /// Sistema que enviou os dados (ex: "HAPI-FHIR", "Epic", "Cerner")
     /// </summary>

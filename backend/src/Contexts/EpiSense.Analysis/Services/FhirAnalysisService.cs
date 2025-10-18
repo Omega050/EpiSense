@@ -1,6 +1,5 @@
 using EpiSense.Analysis.Domain.Entities;
 using EpiSense.Analysis.Domain.ValueObjects;
-using EpiSense.Ingestion.Domain;
 using System.Text.Json;
 
 namespace EpiSense.Analysis.Services;
@@ -13,16 +12,19 @@ public class FhirAnalysisService
     /// <summary>
     /// Analisa uma observação FHIR e gera um resumo clínico
     /// </summary>
-    public ObservationSummary AnalyzeObservation(RawHealthData rawData)
+    /// <param name="fhirJson">JSON FHIR da observação</param>
+    /// <param name="rawDataId">ID do dado bruto no MongoDB (opcional)</param>
+    /// <param name="receivedAt">Data de recebimento do dado (opcional)</param>
+    public ObservationSummary AnalyzeObservation(string fhirJson, string? rawDataId = null, DateTime? receivedAt = null)
     {
-        if (string.IsNullOrWhiteSpace(rawData.RawJson))
+        if (string.IsNullOrWhiteSpace(fhirJson))
         {
-            throw new ArgumentException("JSON FHIR não encontrado nos dados brutos", nameof(rawData));
+            throw new ArgumentException("JSON FHIR não pode ser vazio", nameof(fhirJson));
         }
 
         try
         {
-            using var jsonDoc = JsonDocument.Parse(rawData.RawJson);
+            using var jsonDoc = JsonDocument.Parse(fhirJson);
             var fhirRoot = jsonDoc.RootElement;
 
             // Valida se é um recurso FHIR Observation
@@ -35,8 +37,8 @@ public class FhirAnalysisService
             var summary = new ObservationSummary
             {
                 ObservationId = GetObservationId(fhirRoot),
-                RawDataId = rawData.Id,
-                DataColeta = GetEffectiveDateTime(fhirRoot) ?? rawData.ReceivedAt,
+                RawDataId = rawDataId,
+                DataColeta = GetEffectiveDateTime(fhirRoot) ?? receivedAt ?? DateTime.UtcNow,
                 ProcessedAt = DateTime.UtcNow
             };
 
@@ -53,7 +55,7 @@ public class FhirAnalysisService
         }
         catch (JsonException ex)
         {
-            throw new ArgumentException($"Erro ao analisar JSON FHIR: {ex.Message}", nameof(rawData), ex);
+            throw new ArgumentException($"Erro ao analisar JSON FHIR: {ex.Message}", nameof(fhirJson), ex);
         }
     }
 
@@ -70,7 +72,7 @@ public class FhirAnalysisService
     }
 
     /// <summary>
-    /// Obtém a data/hora efetiva da observação
+    /// Obtém a data/hora efetiva da observação (sempre em UTC)
     /// </summary>
     private DateTime? GetEffectiveDateTime(JsonElement fhirRoot)
     {
@@ -78,7 +80,10 @@ public class FhirAnalysisService
         {
             if (DateTime.TryParse(effectiveElement.GetString(), out var effectiveDate))
             {
-                return effectiveDate;
+                // Garantir que sempre retorna UTC
+                return effectiveDate.Kind == DateTimeKind.Utc 
+                    ? effectiveDate 
+                    : effectiveDate.ToUniversalTime();
             }
         }
         return null;
@@ -103,17 +108,24 @@ public class FhirAnalysisService
 
             switch (code)
             {
+                case LoincCodes.PLAQUETAS:
+                    summary.LabValues["plaquetas"] = value.Value;
+                    break;
                 case LoincCodes.LEUCOCITOS:
                     summary.LabValues["leucocitos"] = value.Value;
                     break;
-                case LoincCodes.PLAQUETAS:
-                    summary.LabValues["plaquetas"] = value.Value;
+                case LoincCodes.HEMATOCRITO:
+                    summary.LabValues["hematocrito"] = value.Value;
                     break;
                 case LoincCodes.HEMOGLOBINA:
                     summary.LabValues["hemoglobina"] = value.Value;
                     break;
-                case LoincCodes.HEMATOCRITO:
-                    summary.LabValues["hematocrito"] = value.Value;
+                case LoincCodes.VCM:
+                case LoincCodes.VCM_ALT:  // Aceita código alternativo 789-8
+                    summary.LabValues["vcm"] = value.Value;
+                    break;
+                case LoincCodes.RDW:
+                    summary.LabValues["rdw"] = value.Value;
                     break;
             }
         }
@@ -197,53 +209,107 @@ public class FhirAnalysisService
     }
 
     /// <summary>
-    /// Aplica regras clínicas para detectar padrões anômalos
+    /// Aplica regras clínicas baseadas em evidências científicas para detectar dengue e anemia
+    /// Referências: Guidelines OMS para dengue e critérios diagnósticos de anemia
     /// </summary>
     private void ApplyClinicalRules(ObservationSummary summary)
     {
         var flags = new List<string>();
 
-        // Análise de leucócitos
-        if (summary.LabValues.TryGetValue("leucocitos", out var leucocitos))
-        {
-            if (leucocitos < 4000)
-                flags.Add(ClinicalFlags.LEUCOPENIA);
-            else if (leucocitos > 11000)
-                flags.Add(ClinicalFlags.LEUCOCITOSE);
-        }
-
-        // Análise de plaquetas
+        // === DETECÇÃO DE SINAIS INDIVIDUAIS - DENGUE ===
+        
+        // 1. Plaquetas - Trombocitopenia (< 100.000/mm³)
+        bool hasTrimbocitopenia = false;
         if (summary.LabValues.TryGetValue("plaquetas", out var plaquetas))
         {
-            if (plaquetas < 150000)
+            if (plaquetas < ClinicalThresholds.DENGUE_PLAQUETAS_BAIXAS)
             {
                 flags.Add(ClinicalFlags.TROMBOCITOPENIA);
-                
-                // Padrão Dengue: trombocitopenia severa
-                if (plaquetas < 100000)
-                    flags.Add(ClinicalFlags.PADRAO_DENGUE);
-            }
-            else if (plaquetas > 450000)
-            {
-                flags.Add(ClinicalFlags.TROMBOCITOSE);
+                hasTrimbocitopenia = true;
             }
         }
 
-        // Análise de hemoglobina (usando valores genéricos)
+        // 2. Leucócitos - Leucopenia
+        bool hasLeucopenia = false;
+        if (summary.LabValues.TryGetValue("leucocitos", out var leucocitos))
+        {
+            if (leucocitos < ClinicalThresholds.DENGUE_LEUCOPENIA_INTENSA)
+            {
+                flags.Add(ClinicalFlags.LEUCOPENIA_INTENSA);
+                hasLeucopenia = true;
+            }
+            else if (leucocitos < ClinicalThresholds.DENGUE_LEUCOPENIA_MODERADA)
+            {
+                flags.Add(ClinicalFlags.LEUCOPENIA_MODERADA);
+                hasLeucopenia = true;
+            }
+        }
+
+        // 3. Hematócrito - Hemoconcentração (sinal de alarme para dengue grave)
+        bool hasHemoconcentracao = false;
+        if (summary.LabValues.TryGetValue("hematocrito", out var hematocrito))
+        {
+            // Critérios: > 40% (mulheres) ou > 45% (homens)
+            // Nota: Sem informação de sexo, usa limite mais conservador
+            if (hematocrito > ClinicalThresholds.HEMATOCRITO_MULHER_ALTO)
+            {
+                flags.Add(ClinicalFlags.HEMOCONCENTRACAO);
+                hasHemoconcentracao = true;
+            }
+        }
+
+        // === PADRÃO COMPOSTO - DENGUE ===
+        // Dengue = Trombocitopenia + Leucopenia + Hemoconcentração
+        if (hasTrimbocitopenia && hasLeucopenia && hasHemoconcentracao)
+        {
+            flags.Add(ClinicalFlags.DENGUE);
+        }
+
+        // === DETECÇÃO DE SINAIS INDIVIDUAIS - ANEMIA ===
+        
+        // 1. Hemoglobina Baixa
+        bool hasHemoglobinaBaixa = false;
         if (summary.LabValues.TryGetValue("hemoglobina", out var hemoglobina))
         {
-            if (hemoglobina < 12.0m) // Limite genérico para anemia
-                flags.Add(ClinicalFlags.ANEMIA);
-            else if (hemoglobina > 16.5m) // Limite genérico para policitemia
-                flags.Add(ClinicalFlags.POLICITEMIA);
+            // Critérios: < 12 g/dL (mulheres), < 13.6 g/dL (homens)
+            // Usa limite mais sensível (mulheres) na ausência de informação de sexo
+            if (hemoglobina < ClinicalThresholds.ANEMIA_HEMOGLOBINA_MULHER)
+            {
+                flags.Add(ClinicalFlags.HEMOGLOBINA_BAIXA);
+                hasHemoglobinaBaixa = true;
+            }
         }
 
-        // Padrões combinados
-        if (flags.Contains(ClinicalFlags.LEUCOPENIA) && flags.Contains(ClinicalFlags.TROMBOCITOPENIA))
-            flags.Add(ClinicalFlags.PADRAO_VIRAL);
+        // 2. VCM - Microcitose (< 80 fL)
+        bool hasMicrocitose = false;
+        if (summary.LabValues.TryGetValue("vcm", out var vcm))
+        {
+            if (vcm < ClinicalThresholds.ANEMIA_VCM_MICROCITOSE)
+            {
+                flags.Add(ClinicalFlags.MICROCITOSE);
+                hasMicrocitose = true;
+            }
+        }
 
-        if (flags.Contains(ClinicalFlags.LEUCOCITOSE))
-            flags.Add(ClinicalFlags.PADRAO_BACTERIANO);
+        // 3. RDW - Anisocitose (variação no tamanho das hemácias)
+        bool hasAnisocitose = false;
+        if (summary.LabValues.TryGetValue("rdw", out var rdw))
+        {
+            // RDW normal geralmente é 11.5-14.5%
+            // Valores acima de 14.5% indicam anisocitose
+            if (rdw > 14.5m)
+            {
+                flags.Add(ClinicalFlags.ANISOCITOSE);
+                hasAnisocitose = true;
+            }
+        }
+
+        // === PADRÃO COMPOSTO - ANEMIA ===
+        // Anemia = Hemoglobina baixa + Microcitose + Anisocitose
+        if (hasHemoglobinaBaixa && hasMicrocitose && hasAnisocitose)
+        {
+            flags.Add(ClinicalFlags.ANEMIA);
+        }
 
         summary.Flags = flags;
     }
