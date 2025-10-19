@@ -13,6 +13,7 @@ public interface IIngestionRepository
     Task SaveRawDataAsync(RawHealthData data);
     Task<RawHealthData?> GetRawDataByIdAsync(string id);
     Task UpdateStatusAsync(string id, IngestionStatus status, string? errorMessage = null);
+    Task UpdateRawDataAsync(RawHealthData data);
     Task<IEnumerable<RawHealthData>> GetDataByStatusAsync(IngestionStatus status);
     Task<IEnumerable<RawHealthData>> GetDataByDateRangeAsync(DateTime startDate, DateTime endDate);
 }

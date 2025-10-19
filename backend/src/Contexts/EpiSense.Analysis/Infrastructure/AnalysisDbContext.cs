@@ -12,6 +12,7 @@ public class AnalysisDbContext : DbContext
 
     // DbSets
     public DbSet<AnalysisResult> AnalysisResults { get; set; } = null!;
+    public DbSet<ObservationSummary> ObservationSummaries { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -44,6 +45,38 @@ public class AnalysisDbContext : DbContext
             entity.HasIndex(e => e.AnalyzedAt);
             entity.HasIndex(e => e.Region);
             entity.HasIndex(e => e.AnalysisType);
+        });
+
+        // Configuração da tabela ObservationSummary
+        modelBuilder.Entity<ObservationSummary>(entity =>
+        {
+            entity.ToTable("observation_summaries");
+            entity.HasKey(e => e.Id);
+            
+            entity.Property(e => e.ObservationId)
+                .IsRequired()
+                .HasMaxLength(255);
+            
+            entity.Property(e => e.CodigoMunicipioIBGE)
+                .HasMaxLength(7);
+            
+            entity.Property(e => e.RawDataId)
+                .HasMaxLength(255);
+            
+            // Configuração JSONB para PostgreSQL
+            entity.Property(e => e.Flags)
+                .HasColumnType("jsonb")
+                .IsRequired();
+            
+            entity.Property(e => e.LabValues)
+                .HasColumnType("jsonb")
+                .IsRequired();
+            
+            // Índices para otimizar consultas epidemiológicas
+            entity.HasIndex(e => e.DataColeta);
+            entity.HasIndex(e => e.CodigoMunicipioIBGE);
+            entity.HasIndex(e => e.ProcessedAt);
+            entity.HasIndex(e => e.RawDataId);
         });
     }
 }
