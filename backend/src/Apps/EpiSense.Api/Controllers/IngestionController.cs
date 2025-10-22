@@ -53,10 +53,11 @@ public class IngestionController : ControllerBase
             );
 
             // 2. Enfileirar análise assíncrona no Hangfire
-            var fhirJsonForAnalysis = rawData.FhirData.ToJson();
+            // Usa o JSON original (jsonString) em vez de rawData.FhirData.ToJson()
+            // para evitar metadados extras do MongoDB
             var jobId = _backgroundJobs.Enqueue<AnalysisJob>(job =>
                 job.ProcessAnalysisAsync(
-                    fhirJsonForAnalysis,
+                    jsonString,  // JSON FHIR original
                     rawData.Id,
                     rawData.Metadata.ReceivedAt
                 )
@@ -80,35 +81,6 @@ public class IngestionController : ControllerBase
                 Success = false,
                 Error = ex.Message
             });
-        }
-    }
-
-    [HttpGet("status/{dataId}")]
-    public async Task<IActionResult> GetIngestionStatus(string dataId)
-    {
-        try
-        {
-            var data = await _repository.GetRawDataByIdAsync(dataId);
-            
-            if (data == null)
-            {
-                return NotFound(new { Error = $"Data with ID {dataId} not found" });
-            }
-
-            return Ok(new
-            {
-                DataId = data.Id,
-                Status = data.Metadata.Status.ToString(),
-                ReceivedAt = data.Metadata.ReceivedAt,
-                ErrorMessage = data.Metadata.ErrorMessage,
-                SourceSystem = data.Metadata.SourceSystem,
-                SourceUrl = data.Metadata.SourceUrl,
-                RawDataSize = data.FhirData?.ElementCount ?? 0
-            });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Error = ex.Message });
         }
     }
 
@@ -143,26 +115,6 @@ public class IngestionController : ControllerBase
             {
                 TotalCount = result.Count(),
                 Data = result
-            });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { Error = ex.Message });
-        }
-    }
-
-    [HttpPost("process")]
-    public async Task<IActionResult> ProcessPendingData()
-    {
-        try
-        {
-            
-            await _ingestionService.ProcessIncomingDataAsync();
-            
-            return Ok(new
-            {
-                Success = true,
-                Message = "Processing initiated for pending data"
             });
         }
         catch (Exception ex)

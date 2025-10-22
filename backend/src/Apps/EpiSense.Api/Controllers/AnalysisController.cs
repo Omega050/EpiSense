@@ -34,20 +34,10 @@ public class AnalysisController : ControllerBase
                 CodigoMunicipioIBGE = o.CodigoMunicipioIBGE ?? "N/A",
                 Flags = o.Flags,
                 LabValues = o.LabValues,
-                ProcessedAt = o.ProcessedAt,
-                o.RawDataId,
-                // Informações agregadas
-                FlagCount = o.Flags.Count,
-                HasClinicalFlags = o.Flags.Count > 0,
-                // Flags específicas
-                HasDengue = o.Flags.Contains("DENGUE"),
-                HasAnemia = o.Flags.Contains("ANEMIA"),
-                HasTrombocitopenia = o.Flags.Contains("TROMBOCITOPENIA"),
-                HasLeucopenia = o.Flags.Contains("LEUCOPENIA_INTENSA") || o.Flags.Contains("LEUCOPENIA_MODERADA"),
-                HasHemoconcentracao = o.Flags.Contains("HEMOCONCENTRACAO"),
-                HasHemoglobinaBaixa = o.Flags.Contains("HEMOGLOBINA_BAIXA"),
-                HasMicrocitose = o.Flags.Contains("MICROCITOSE"),
-                HasAnisocitose = o.Flags.Contains("ANISOCITOSE")
+                // Flags clínicas computadas
+                HasSibSuspeita = o.HasSibSuspeita,
+                HasSibGrave = o.HasSibGrave,
+                HasAnySib = o.HasAnySib
             }).ToList();
 
             return Ok(new
@@ -56,13 +46,11 @@ public class AnalysisController : ControllerBase
                 TotalCount = result.Count,
                 Statistics = new
                 {
-                    WithFlags = result.Count(o => o.HasClinicalFlags),
-                    WithoutFlags = result.Count(o => !o.HasClinicalFlags),
-                    DengueFlags = result.Count(o => o.HasDengue),
-                    AnemiaFlags = result.Count(o => o.HasAnemia),
-                    TrombocitopeniaFlags = result.Count(o => o.HasTrombocitopenia),
-                    LeucopeniaFlags = result.Count(o => o.HasLeucopenia),
-                    HemoconcentracaoFlags = result.Count(o => o.HasHemoconcentracao)
+                    WithFlags = result.Count(o => o.Flags.Count > 0),
+                    WithoutFlags = result.Count(o => o.Flags.Count == 0),
+                    SibSuspeitaCount = result.Count(o => o.HasSibSuspeita),
+                    SibGraveCount = result.Count(o => o.HasSibGrave),
+                    AnySibCount = result.Count(o => o.HasAnySib)
                 },
                 Data = result
             });
