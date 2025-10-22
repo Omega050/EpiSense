@@ -13,6 +13,7 @@ public class AnalysisDbContext : DbContext
     // DbSets
     public DbSet<AnalysisResult> AnalysisResults { get; set; } = null!;
     public DbSet<ObservationSummary> ObservationSummaries { get; set; } = null!;
+    public DbSet<DailyCaseAggregation> DailyCaseAggregations { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -60,9 +61,6 @@ public class AnalysisDbContext : DbContext
             entity.Property(e => e.CodigoMunicipioIBGE)
                 .HasMaxLength(7);
             
-            entity.Property(e => e.RawDataId)
-                .HasMaxLength(255);
-            
             // Configuração JSONB para PostgreSQL
             entity.Property(e => e.Flags)
                 .HasColumnType("jsonb")
@@ -75,8 +73,46 @@ public class AnalysisDbContext : DbContext
             // Índices para otimizar consultas epidemiológicas
             entity.HasIndex(e => e.DataColeta);
             entity.HasIndex(e => e.CodigoMunicipioIBGE);
-            entity.HasIndex(e => e.ProcessedAt);
-            entity.HasIndex(e => e.RawDataId);
+            
+            // Índice GIN para buscar por flags específicas (PostgreSQL JSONB)
+            entity.HasIndex(e => e.Flags)
+                .HasMethod("gin");
+        });
+
+        // Configuração da tabela DailyCaseAggregation
+        modelBuilder.Entity<DailyCaseAggregation>(entity =>
+        {
+            entity.ToTable("daily_case_aggregations");
+            entity.HasKey(e => e.Id);
+            
+            entity.Property(e => e.MunicipioIBGE)
+                .IsRequired()
+                .HasMaxLength(7);
+            
+            entity.Property(e => e.Data)
+                .IsRequired()
+                .HasColumnType("date");
+            
+            entity.Property(e => e.Flag)
+                .IsRequired()
+                .HasMaxLength(100);
+            
+            entity.Property(e => e.TotalCasos)
+                .IsRequired()
+                .HasDefaultValue(0);
+            
+            entity.Property(e => e.UpdatedAt)
+                .IsRequired()
+                .HasDefaultValueSql("NOW()");
+            
+            // Constraint única: apenas 1 registro por (município, data, flag)
+            entity.HasIndex(e => new { e.MunicipioIBGE, e.Data, e.Flag })
+                .IsUnique()
+                .HasDatabaseName("IX_daily_case_aggregations_unique");
+            
+            // Índice de lookup otimizado para consultas do Shewhart
+            entity.HasIndex(e => new { e.MunicipioIBGE, e.Data, e.Flag })
+                .HasDatabaseName("IX_daily_case_aggregations_lookup");
         });
     }
 }

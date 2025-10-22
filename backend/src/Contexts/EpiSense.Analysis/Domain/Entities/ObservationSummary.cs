@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using EpiSense.Analysis.Domain.ValueObjects;
 
 namespace EpiSense.Analysis.Domain.Entities;
 
@@ -41,21 +42,31 @@ public class ObservationSummary
     public List<string> Flags { get; set; } = new();
     
     /// <summary>
-    /// Data de processamento da análise
-    /// </summary>
-    [Column("processed_at")]
-    public DateTime ProcessedAt { get; set; } = DateTime.UtcNow;
-    
-    /// <summary>
-    /// ID da observação bruta no MongoDB
-    /// </summary>
-    [Column("raw_data_id")]
-    [StringLength(255)]
-    public string? RawDataId { get; set; }
-    
-    /// <summary>
     /// Valores laboratoriais principais (JSON)
     /// </summary>
     [Column("lab_values", TypeName = "jsonb")]
     public Dictionary<string, decimal> LabValues { get; set; } = new();
+    
+    // ==================== PROPRIEDADES COMPUTADAS ====================
+    
+    /// <summary>
+    /// Indica se há suspeita de Síndrome de Infecção Bacteriana (SIB)
+    /// Computed: true se contém flag SIB_SUSPEITA
+    /// </summary>
+    [NotMapped]
+    public bool HasSibSuspeita => Flags.Contains(ClinicalFlags.Clinical.SIB_SUSPEITA);
+    
+    /// <summary>
+    /// Indica se há suspeita de SIB Grave
+    /// Computed: true se contém flag SIB_GRAVE
+    /// </summary>
+    [NotMapped]
+    public bool HasSibGrave => Flags.Contains(ClinicalFlags.Clinical.SIB_GRAVE);
+    
+    /// <summary>
+    /// Indica se há qualquer flag clínica de SIB (suspeita ou grave)
+    /// Computed: true se contém SIB_SUSPEITA OU SIB_GRAVE
+    /// </summary>
+    [NotMapped]
+    public bool HasAnySib => HasSibSuspeita || HasSibGrave;
 }
