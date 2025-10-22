@@ -3,9 +3,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace EpiSense.Analysis.Infrastructure;
 
-/// <summary>
-/// Implementação do repositório de análises usando PostgreSQL
-/// </summary>
 public class AnalysisRepository : IAnalysisRepository
 {
     private readonly AnalysisDbContext _context;
@@ -31,7 +28,7 @@ public class AnalysisRepository : IAnalysisRepository
     public async Task<IEnumerable<ObservationSummary>> GetAllAsync()
     {
         return await _context.ObservationSummaries
-            .OrderByDescending(s => s.ProcessedAt)
+            .OrderByDescending(s => s.DataColeta)
             .ToListAsync();
     }
 
@@ -67,11 +64,8 @@ public class AnalysisRepository : IAnalysisRepository
         if (endDate.HasValue)
             query = query.Where(s => s.DataColeta <= endDate.Value);
 
-        // Filtra por flags usando operador JSONB @> (contains)
-        // Para PostgreSQL: WHERE flags @> '["DENGUE"]'
         var results = await query.ToListAsync();
-        
-        // Filtro em memória (pode ser otimizado com SQL raw query se necessário)
+    
         return results
             .Where(s => s.Flags.Any(f => flags.Contains(f)))
             .OrderByDescending(s => s.DataColeta)
