@@ -12,8 +12,10 @@ O poder do EpiSense não está em analisar um único exame, mas em identificar o
 * **Contexto Geográfico:** Correlacionar anomalias laboratoriais com regiões específicas (municípios, bairros), permitindo ações de vigilância focadas.
 * **Cenários de Detecção:**
 * 📈 **Aumento de Leucócitos** em uma área → Suspeita de surto bacteriano local.
-* 📉 **Queda de Plaquetas** em múltiplos exames → Alerta precoce de arboviroses (ex: Dengue).
-* 🩸 **Redução de Hemoglobina** em um grupo populacional → Indício de problemas ambientais ou nutricionais.
+* � **Análise laboratorial** inteligente de dados FHIR.
+* 🚨 **Detecção temporal de surtos** com algoritmos de controle estatístico.
+* 📉 **Leucocitose e Neutrofilia** em múltiplos exames → Alerta precoce de infecções bacterianas (SIB).
+* 🗺️ **Geolocalização** de alertas por município.
 
 ## Requisitos Chave
 
