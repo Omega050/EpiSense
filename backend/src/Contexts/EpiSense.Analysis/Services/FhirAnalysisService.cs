@@ -12,7 +12,7 @@ public class FhirAnalysisService
     /// <summary>
     /// Analisa uma observação FHIR e gera um resumo clínico
     /// </summary>
-    /// <param name="fhirJson">JSON FHIR da observação</param>
+    /// <param name="fhirJson">JSON FHIR da observação ou Bundle contendo observações</param>
     /// <param name="rawDataId">ID do dado bruto no MongoDB (opcional)</param>
     /// <param name="receivedAt">Data de recebimento do dado (opcional)</param>
     public ObservationSummary AnalyzeObservation(string fhirJson, string? rawDataId = null, DateTime? receivedAt = null)
@@ -27,19 +27,30 @@ public class FhirAnalysisService
             using var jsonDoc = JsonDocument.Parse(fhirJson);
             var fhirRoot = jsonDoc.RootElement;
 
-            // Valida se é um recurso FHIR Observation
-            if (!fhirRoot.TryGetProperty("resourceType", out var resourceType) || 
-                resourceType.GetString() != "Observation")
+            // Verifica o tipo de recurso FHIR
+            if (!fhirRoot.TryGetProperty("resourceType", out var resourceType))
             {
-                throw new ArgumentException("Dados FHIR não são do tipo Observation");
+                throw new ArgumentException("JSON FHIR não possui propriedade 'resourceType'");
+            }
+
+            var resourceTypeStr = resourceType.GetString();
+            JsonElement? bundleRoot = null;
+            
+            // Se for um Bundle, extrai a primeira Observation e guarda referência ao Bundle
+            if (resourceTypeStr == "Bundle")
+            {
+                bundleRoot = fhirRoot;
+                fhirRoot = ExtractObservationFromBundle(fhirRoot);
+            }
+            else if (resourceTypeStr != "Observation")
+            {
+                throw new ArgumentException($"Dados FHIR não são do tipo Observation ou Bundle. Tipo recebido: {resourceTypeStr}");
             }
 
             var summary = new ObservationSummary
             {
                 ObservationId = GetObservationId(fhirRoot),
-                RawDataId = rawDataId,
-                DataColeta = GetEffectiveDateTime(fhirRoot) ?? receivedAt ?? DateTime.UtcNow,
-                ProcessedAt = DateTime.UtcNow
+                DataColeta = GetEffectiveDateTime(fhirRoot) ?? receivedAt ?? DateTime.UtcNow
             };
 
             // Extrair valores laboratoriais dos componentes
@@ -48,8 +59,15 @@ public class FhirAnalysisService
             // Aplicar regras clínicas para gerar flags
             ApplyClinicalRules(summary);
             
-            // Tentar extrair código do município (se disponível nos dados)
-            ExtractMunicipalityCode(fhirRoot, summary);
+            // Extrair código do município do Patient (se Bundle estiver disponível)
+            if (bundleRoot.HasValue)
+            {
+                ExtractMunicipalityCodeFromBundle(bundleRoot.Value, summary);
+            }
+            else
+            {
+                ExtractMunicipalityCode(fhirRoot, summary);
+            }
 
             return summary;
         }
@@ -57,6 +75,30 @@ public class FhirAnalysisService
         {
             throw new ArgumentException($"Erro ao analisar JSON FHIR: {ex.Message}", nameof(fhirJson), ex);
         }
+    }
+
+    /// <summary>
+    /// Extrai a primeira Observation de um Bundle FHIR
+    /// </summary>
+    private JsonElement ExtractObservationFromBundle(JsonElement bundleRoot)
+    {
+        if (!bundleRoot.TryGetProperty("entry", out var entries) ||
+            entries.ValueKind != JsonValueKind.Array)
+        {
+            throw new ArgumentException("Bundle FHIR não contém array 'entry'");
+        }
+
+        foreach (var entry in entries.EnumerateArray())
+        {
+            if (entry.TryGetProperty("resource", out var resource) &&
+                resource.TryGetProperty("resourceType", out var resourceType) &&
+                resourceType.GetString() == "Observation")
+            {
+                return resource;
+            }
+        }
+
+        throw new ArgumentException("Bundle FHIR não contém nenhum recurso do tipo Observation");
     }
 
     /// <summary>
@@ -108,24 +150,19 @@ public class FhirAnalysisService
 
             switch (code)
             {
-                case LoincCodes.PLAQUETAS:
-                    summary.LabValues["plaquetas"] = value.Value;
-                    break;
                 case LoincCodes.LEUCOCITOS:
                     summary.LabValues["leucocitos"] = value.Value;
                     break;
-                case LoincCodes.HEMATOCRITO:
-                    summary.LabValues["hematocrito"] = value.Value;
+                case LoincCodes.NEUTROFILOS:
+                case LoincCodes.NEUTROFILOS_ALT:  // Aceita código alternativo
+                    summary.LabValues["neutrofilos"] = value.Value;
                     break;
-                case LoincCodes.HEMOGLOBINA:
-                    summary.LabValues["hemoglobina"] = value.Value;
+                case LoincCodes.BASTONETES:
+                case LoincCodes.BASTONETES_ALT:  // Aceita código alternativo 711-2
+                    summary.LabValues["bastonetes"] = value.Value;
                     break;
-                case LoincCodes.VCM:
-                case LoincCodes.VCM_ALT:  // Aceita código alternativo 789-8
-                    summary.LabValues["vcm"] = value.Value;
-                    break;
-                case LoincCodes.RDW:
-                    summary.LabValues["rdw"] = value.Value;
+                case LoincCodes.BASTONETES_PCT:
+                    summary.LabValues["bastonetes_pct"] = value.Value;
                     break;
             }
         }
@@ -169,7 +206,22 @@ public class FhirAnalysisService
             valueElement.TryGetProperty("value", out var valueNumber) &&
             valueNumber.ValueKind == JsonValueKind.Number)
         {
-            return valueNumber.GetDecimal();
+            var value = valueNumber.GetDecimal();
+            
+            // Verifica a unidade para fazer conversão se necessário
+            if (valueElement.TryGetProperty("code", out var unitCode))
+            {
+                var unit = unitCode.GetString();
+                
+                // Se a unidade for 10*3/uL ou x10*3/uL, multiplica por 1000
+                // para converter para células/μL
+                if (unit == "10*3/uL" || unit == "x10*3/uL")
+                {
+                    value *= 1000m;
+                }
+            }
+            
+            return value;
         }
         return null;
     }
@@ -209,106 +261,73 @@ public class FhirAnalysisService
     }
 
     /// <summary>
-    /// Aplica regras clínicas baseadas em evidências científicas para detectar dengue e anemia
-    /// Referências: Guidelines OMS para dengue e critérios diagnósticos de anemia
+    /// Aplica regras clínicas baseadas em evidências científicas para detectar Síndrome de Infecção Bacteriana (SIB)
+    /// Referências: Critérios hematológicos para infecção bacteriana em adultos
     /// </summary>
     private void ApplyClinicalRules(ObservationSummary summary)
     {
         var flags = new List<string>();
 
-        // === DETECÇÃO DE SINAIS INDIVIDUAIS - DENGUE ===
+        // === DETECÇÃO DE SINAIS INDIVIDUAIS - INFECÇÃO BACTERIANA ===
         
-        // 1. Plaquetas - Trombocitopenia (< 100.000/mm³)
-        bool hasTrimbocitopenia = false;
-        if (summary.LabValues.TryGetValue("plaquetas", out var plaquetas))
-        {
-            if (plaquetas < ClinicalThresholds.DENGUE_PLAQUETAS_BAIXAS)
-            {
-                flags.Add(ClinicalFlags.TROMBOCITOPENIA);
-                hasTrimbocitopenia = true;
-            }
-        }
-
-        // 2. Leucócitos - Leucopenia
-        bool hasLeucopenia = false;
+        // 1. Leucócitos Totais - Leucocitose (> 11.000/μL)
+        bool hasLeucocitose = false;
         if (summary.LabValues.TryGetValue("leucocitos", out var leucocitos))
         {
-            if (leucocitos < ClinicalThresholds.DENGUE_LEUCOPENIA_INTENSA)
+            if (leucocitos > ClinicalThresholds.LEUCOCITOSE)
             {
-                flags.Add(ClinicalFlags.LEUCOPENIA_INTENSA);
-                hasLeucopenia = true;
-            }
-            else if (leucocitos < ClinicalThresholds.DENGUE_LEUCOPENIA_MODERADA)
-            {
-                flags.Add(ClinicalFlags.LEUCOPENIA_MODERADA);
-                hasLeucopenia = true;
+                flags.Add(ClinicalFlags.Laboratory.LEUCOCITOSE);
+                hasLeucocitose = true;
             }
         }
 
-        // 3. Hematócrito - Hemoconcentração (sinal de alarme para dengue grave)
-        bool hasHemoconcentracao = false;
-        if (summary.LabValues.TryGetValue("hematocrito", out var hematocrito))
+        // 2. Neutrófilos Absolutos - Neutrofilia (> 7.500/μL)
+        bool hasNeutrofilia = false;
+        if (summary.LabValues.TryGetValue("neutrofilos", out var neutrofilos))
         {
-            // Critérios: > 40% (mulheres) ou > 45% (homens)
-            // Nota: Sem informação de sexo, usa limite mais conservador
-            if (hematocrito > ClinicalThresholds.HEMATOCRITO_MULHER_ALTO)
+            if (neutrofilos > ClinicalThresholds.NEUTROFILIA)
             {
-                flags.Add(ClinicalFlags.HEMOCONCENTRACAO);
-                hasHemoconcentracao = true;
+                flags.Add(ClinicalFlags.Laboratory.NEUTROFILIA);
+                hasNeutrofilia = true;
             }
         }
 
-        // === PADRÃO COMPOSTO - DENGUE ===
-        // Dengue = Trombocitopenia + Leucopenia + Hemoconcentração
-        if (hasTrimbocitopenia && hasLeucopenia && hasHemoconcentracao)
-        {
-            flags.Add(ClinicalFlags.DENGUE);
-        }
-
-        // === DETECÇÃO DE SINAIS INDIVIDUAIS - ANEMIA ===
+        // 3. Bastonetes - Desvio à Esquerda (> 500/μL ou > 10%)
+        bool hasDesvioEsquerda = false;
         
-        // 1. Hemoglobina Baixa
-        bool hasHemoglobinaBaixa = false;
-        if (summary.LabValues.TryGetValue("hemoglobina", out var hemoglobina))
+        // Verifica valor absoluto de bastonetes
+        if (summary.LabValues.TryGetValue("bastonetes", out var bastonetes))
         {
-            // Critérios: < 12 g/dL (mulheres), < 13.6 g/dL (homens)
-            // Usa limite mais sensível (mulheres) na ausência de informação de sexo
-            if (hemoglobina < ClinicalThresholds.ANEMIA_HEMOGLOBINA_MULHER)
+            if (bastonetes > ClinicalThresholds.DESVIO_ESQUERDA)
             {
-                flags.Add(ClinicalFlags.HEMOGLOBINA_BAIXA);
-                hasHemoglobinaBaixa = true;
+                flags.Add(ClinicalFlags.Laboratory.DESVIO_ESQUERDA);
+                hasDesvioEsquerda = true;
+            }
+        }
+        
+        // Verifica percentual de bastonetes (se valor absoluto não foi detectado)
+        if (!hasDesvioEsquerda && summary.LabValues.TryGetValue("bastonetes_pct", out var bastonetesPct))
+        {
+            if (bastonetesPct > ClinicalThresholds.DESVIO_ESQUERDA_PCT)
+            {
+                flags.Add(ClinicalFlags.Laboratory.DESVIO_ESQUERDA);
+                hasDesvioEsquerda = true;
             }
         }
 
-        // 2. VCM - Microcitose (< 80 fL)
-        bool hasMicrocitose = false;
-        if (summary.LabValues.TryGetValue("vcm", out var vcm))
+        // === PADRÃO COMPOSTO - SUSPEITA DE SIB (Flag Clínica) ===
+        // SIB Suspeita = Leucocitose (> 11.000/μL) + Neutrofilia (> 7.500/μL)
+        if (hasLeucocitose && hasNeutrofilia)
         {
-            if (vcm < ClinicalThresholds.ANEMIA_VCM_MICROCITOSE)
-            {
-                flags.Add(ClinicalFlags.MICROCITOSE);
-                hasMicrocitose = true;
-            }
+            flags.Add(ClinicalFlags.Clinical.SIB_SUSPEITA);
         }
 
-        // 3. RDW - Anisocitose (variação no tamanho das hemácias)
-        bool hasAnisocitose = false;
-        if (summary.LabValues.TryGetValue("rdw", out var rdw))
+        // === PADRÃO COMPOSTO - SIB GRAVE (Flag Clínica) ===
+        // SIB Grave = Neutrofilia (> 7.500/μL) + Desvio à Esquerda (Bastonetes > 500/μL ou > 10%)
+        // Este padrão indica infecção mais grave, independente da contagem total de leucócitos
+        if (hasNeutrofilia && hasDesvioEsquerda)
         {
-            // RDW normal geralmente é 11.5-14.5%
-            // Valores acima de 14.5% indicam anisocitose
-            if (rdw > 14.5m)
-            {
-                flags.Add(ClinicalFlags.ANISOCITOSE);
-                hasAnisocitose = true;
-            }
-        }
-
-        // === PADRÃO COMPOSTO - ANEMIA ===
-        // Anemia = Hemoglobina baixa + Microcitose + Anisocitose
-        if (hasHemoglobinaBaixa && hasMicrocitose && hasAnisocitose)
-        {
-            flags.Add(ClinicalFlags.ANEMIA);
+            flags.Add(ClinicalFlags.Clinical.SIB_GRAVE);
         }
 
         summary.Flags = flags;
@@ -334,5 +353,105 @@ public class FhirAnalysisService
         //     var reference = referenceElement.GetString();
         //     // Buscar dados do paciente e extrair código do município
         // }
+    }
+    
+    /// <summary>
+    /// Extrai o código do município IBGE do recurso Patient no Bundle
+    /// Mapeia cidade brasileira para código IBGE de 7 dígitos
+    /// </summary>
+    private void ExtractMunicipalityCodeFromBundle(JsonElement bundleRoot, ObservationSummary summary)
+    {
+        if (!bundleRoot.TryGetProperty("entry", out var entries) ||
+            entries.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        // Procura o recurso Patient no Bundle
+        foreach (var entry in entries.EnumerateArray())
+        {
+            if (!entry.TryGetProperty("resource", out var resource) ||
+                !resource.TryGetProperty("resourceType", out var resourceType) ||
+                resourceType.GetString() != "Patient")
+            {
+                continue;
+            }
+
+            // Extrai endereço do paciente
+            if (!resource.TryGetProperty("address", out var addresses) ||
+                addresses.ValueKind != JsonValueKind.Array)
+            {
+                continue;
+            }
+
+            foreach (var address in addresses.EnumerateArray())
+            {
+                // Obtém cidade e estado
+                string? city = null;
+                string? state = null;
+
+                if (address.TryGetProperty("city", out var cityElement))
+                {
+                    city = cityElement.GetString();
+                }
+
+                if (address.TryGetProperty("state", out var stateElement))
+                {
+                    state = stateElement.GetString();
+                }
+
+                // Se encontrou cidade e estado, mapeia para código IBGE
+                if (!string.IsNullOrEmpty(city) && !string.IsNullOrEmpty(state))
+                {
+                    summary.CodigoMunicipioIBGE = MapCityToIBGECode(city, state);
+                    return;
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Mapeia nome da cidade e estado para código IBGE
+    /// Referência: https://www.ibge.gov.br/explica/codigos-dos-municipios.php
+    /// </summary>
+    private string? MapCityToIBGECode(string city, string state)
+    {
+        // Remove acentos e normaliza para comparação
+        var normalizedCity = city.ToUpperInvariant().Trim();
+        var normalizedState = state.ToUpperInvariant().Trim();
+
+        // Mapeamento de algumas cidades principais (expandir conforme necessário)
+        // Formato: "Cidade|Estado" -> Código IBGE 7 dígitos
+        var cityMap = new Dictionary<string, string>
+        {
+            // Goiás
+            ["TRINDADE|GO"] = "5221403",
+            ["GOIANIA|GO"] = "5208707",
+            ["APARECIDA DE GOIANIA|GO"] = "5201405",
+            ["ANAPOLIS|GO"] = "5201108",
+            
+            // Capitais principais
+            ["SAO PAULO|SP"] = "3550308",
+            ["RIO DE JANEIRO|RJ"] = "3304557",
+            ["BRASILIA|DF"] = "5300108",
+            ["BELO HORIZONTE|MG"] = "3106200",
+            ["SALVADOR|BA"] = "2927408",
+            ["FORTALEZA|CE"] = "2304400",
+            ["RECIFE|PE"] = "2611606",
+            ["CURITIBA|PR"] = "4106902",
+            ["PORTO ALEGRE|RS"] = "4314902",
+            ["MANAUS|AM"] = "1302603"
+        };
+
+        var key = $"{normalizedCity}|{normalizedState}";
+        
+        if (cityMap.TryGetValue(key, out var ibgeCode))
+        {
+            return ibgeCode;
+        }
+
+        // TODO: Implementar busca em base completa de municípios IBGE
+        // Por enquanto, retorna null para cidades não mapeadas
+        return null;
     }
 }
