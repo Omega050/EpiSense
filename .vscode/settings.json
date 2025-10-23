@@ -1,0 +1,14 @@
+{
+    "java.configuration.updateBuildConfiguration": "interactive",
+    "sqltools.connections": [
+        {
+            "server": "localhost",
+            "port": 9042,
+            "previewLimit": 50,
+            "askForPassword": true,
+            "driver": "Scylla",
+            "name": "fhir-gen"
+        }
+    ],
+    "java.compile.nullAnalysis.mode": "automatic"
+}
