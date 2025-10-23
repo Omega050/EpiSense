@@ -17,15 +17,16 @@ Container_Boundary(app, "Aplicação EpiSense (.NET 8)") {
   ' Módulo de Ingestão
   Component(ingestion_mod, "Módulo de Ingestão", "EpiSense.Ingestion", "Recebe e valida dados FHIR brutos.")
   
-  ' Módulo de Análise
-  Component(analysis_mod, "Módulo de Análise", "EpiSense.Analysis", "Processa FHIR, detecta flags clínicas, gera resumos.")
-  Component(fhir_service, "FhirAnalysisService", "Serviço de Análise", "Extrai flags (LEUCOPENIA, TROMBOCITOSE), cria ObservationSummary.")
+  ' Módulo de Análise (dividido em duas responsabilidades)
+  Component(analysis_mod, "Módulo de Análise", "EpiSense.Analysis", "Processa dados FHIR e realiza análises epidemiológicas.")
+  Component(fhir_service, "FhirAnalysisService", "Análise Individual", "Processa FHIR individual, anonimiza dados, detecta flags clínicas (SIB_SUSPEITA, SIB_GRAVE).")
+  Component(observation_service, "ObservationAnalysisService", "Análise Quantitativa", "Análises baseadas em triggers (Shewhart, agregações, detecção de anomalias) - em implementação.")
   
   Component(alerts_mod, "Módulo de Alertas", "EpiSense.Alerts", "Reage a eventos; cria/atualiza alertas.")
   
   ' Persistência Híbrida (ADR-006)
   ComponentDb(ingestion_repo, "Persistência Ingestão", "MongoDB (driver C#)", "Dump de dados brutos FHIR.")
-  ComponentDb(analysis_repo, "Persistência Análise", "PostgreSQL + EF Core", "Resumos estruturados, flags clínicas, JSONB.")
+  ComponentDb(analysis_repo, "Persistência Análise", "PostgreSQL + EF Core", "ObservationSummary (flags clínicas), DailyCaseAggregation (agregações), triggers.")
   ComponentDb(alerts_repo, "Persistência de Alertas", "MongoDB (driver C#)", "Alertas e notificações.")
 }
 
@@ -40,8 +41,11 @@ Rel(ingestion_mod, ingestion_repo, "Armazena dados brutos (dump)", "MongoDB Driv
 
 Rel(api, hangfire, "Enfileira análise individual", "Hangfire Background Job")
 Rel(hangfire, analysis_mod, "Dispara análise", "In-process")
-Rel(analysis_mod, fhir_service, "Processa observações", "In-process")
-Rel(fhir_service, analysis_repo, "Persiste dados analíticos", "Entity Framework")
+Rel(analysis_mod, fhir_service, "Processa FHIR individual", "In-process")
+Rel(fhir_service, analysis_repo, "Persiste ObservationSummary", "Entity Framework")
+
+Rel(observation_service, analysis_repo, "Lê ObservationSummary / Persiste agregações", "Entity Framework")
+Rel_U(analysis_mod, observation_service, "Triggers periódicos", "Scheduled/Manual")
 
 Rel(analysis_mod, mediator, "Publica eventos (E-CST)", "In-memory")
 Rel_R(mediator, alerts_mod, "Entrega eventos", "In-memory subscription")
@@ -53,6 +57,9 @@ Rel(alerts_mod, alerts_repo, "Persiste alertas", "MongoDB Driver")
 ' - ADR-006: Arquitetura híbrida - MongoDB (ingestão dump) + PostgreSQL (análise) + MongoDB (alertas)
 ' - ADR-003: Mediador in-memory (MediatR), módulos desacoplados
 ' - ADR-008: API orquestra análise via Hangfire (processamento assíncrono)
-' - Implementação: FhirAnalysisService, ObservationSummary, Clinical Flags
+' - Implementação: 
+'   * FhirAnalysisService: Análise individual FHIR, anonimização, flags clínicas (SIB)
+'   * ObservationAnalysisService: Análises quantitativas, triggers, Shewhart, agregações (em implementação)
+'   * PostgreSQL: ObservationSummary, DailyCaseAggregation (JSONB)
 ' - Análise não acessa MongoDB diretamente; recebe dados da API via Hangfire
 @enduml
