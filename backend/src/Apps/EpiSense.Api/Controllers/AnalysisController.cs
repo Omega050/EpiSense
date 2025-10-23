@@ -29,15 +29,13 @@ public class AnalysisController : ControllerBase
             var result = observationsList.Select(o => new
             {
                 o.Id,
-                o.ObservationId,
                 DataColeta = o.DataColeta,
                 CodigoMunicipioIBGE = o.CodigoMunicipioIBGE ?? "N/A",
                 Flags = o.Flags,
                 LabValues = o.LabValues,
                 // Flags clínicas computadas
                 HasSibSuspeita = o.HasSibSuspeita,
-                HasSibGrave = o.HasSibGrave,
-                HasAnySib = o.HasAnySib
+                HasSibGrave = o.HasSibGrave
             }).ToList();
 
             return Ok(new
@@ -46,11 +44,8 @@ public class AnalysisController : ControllerBase
                 TotalCount = result.Count,
                 Statistics = new
                 {
-                    WithFlags = result.Count(o => o.Flags.Count > 0),
-                    WithoutFlags = result.Count(o => o.Flags.Count == 0),
                     SibSuspeitaCount = result.Count(o => o.HasSibSuspeita),
-                    SibGraveCount = result.Count(o => o.HasSibGrave),
-                    AnySibCount = result.Count(o => o.HasAnySib)
+                    SibGraveCount = result.Count(o => o.HasSibGrave)
                 },
                 Data = result
             });

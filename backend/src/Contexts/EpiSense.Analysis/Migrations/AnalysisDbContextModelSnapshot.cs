@@ -23,50 +23,48 @@ namespace EpiSense.Analysis.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("EpiSense.Analysis.Domain.Entities.AnalysisResult", b =>
+            modelBuilder.Entity("EpiSense.Analysis.Domain.Entities.DailyCaseAggregation", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
-                    b.Property<string>("AnalysisType")
+                    b.Property<DateTime>("Data")
+                        .HasColumnType("date")
+                        .HasColumnName("data");
+
+                    b.Property<string>("Flag")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("flag");
 
-                    b.Property<DateTime>("AnalyzedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CasesCount")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(2000)
-                        .HasColumnType("character varying(2000)");
-
-                    b.Property<string>("Region")
+                    b.Property<string>("MunicipioIBGE")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
+                        .HasMaxLength(7)
+                        .HasColumnType("character varying(7)")
+                        .HasColumnName("municipio_ibge");
 
-                    b.Property<double>("RiskScore")
-                        .HasColumnType("double precision");
+                    b.Property<int>("TotalCasos")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("total_casos");
 
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at")
+                        .HasDefaultValueSql("NOW()");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AnalysisType");
+                    b.HasIndex("MunicipioIBGE", "Data", "Flag")
+                        .IsUnique()
+                        .HasDatabaseName("IX_daily_case_aggregations_lookup");
 
-                    b.HasIndex("AnalyzedAt");
-
-                    b.HasIndex("Region");
-
-                    b.ToTable("analysis_results", "analysis");
+                    b.ToTable("daily_case_aggregations", (string)null);
                 });
 
             modelBuilder.Entity("EpiSense.Analysis.Domain.Entities.ObservationSummary", b =>
