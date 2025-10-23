@@ -1,6 +1,7 @@
-version: '3.8'
+version: "3.8"
 
 services:
+  # MongoDB - Backend Storage
   mongodb:
     image: mongo:7.0
     container_name: episense-mongodb
@@ -13,6 +14,51 @@ services:
       - mongodb_data:/data/db
     networks:
       - episense-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ScyllaDB - FHIR Generator Storage
+  scylladb:
+    image: scylladb/scylla:latest
+    container_name: episense-scylladb
+    restart: unless-stopped
+    ports:
+      - "9042:9042"
+    volumes:
+      - scylla_data:/var/lib/scylla
+      - ./fhir-generator/src/main/resources/schema.cql:/schema.cql:ro
+    command: --smp 1 --memory 512M
+    networks:
+      - episense-network
+    healthcheck:
+      test: ["CMD", "cqlsh", "-e", "describe keyspaces"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # ScyllaDB Schema Initializer
+  scylladb-init:
+    image: cassandra:latest
+    container_name: episense-scylladb-init
+    depends_on:
+      scylladb:
+        condition: service_healthy
+    volumes:
+      - ./fhir-generator/src/main/resources/schema.cql:/schema.cql:ro
+    entrypoint: >
+      sh -c "
+        echo 'Waiting for ScyllaDB to be fully ready...' &&
+        sleep 10 &&
+        echo 'Executing schema...' &&
+        cqlsh scylladb -f /schema.cql &&
+        echo 'Schema executed successfully!'
+      "
+    networks:
+      - episense-network
+    restart: "no"
 
   postgres:
     image: postgres:16-alpine
@@ -39,6 +85,8 @@ volumes:
   mongodb_data:
     driver: local
   postgres_data:
+    driver: local
+  scylla_data:
     driver: local
 
 networks:
