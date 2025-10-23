@@ -1,0 +1,120 @@
+{
+  "groups": [
+    {
+      "name": "external.api",
+      "type": "com.episense.fhirgenerator.config.ExternalApiProperties",
+      "sourceType": "com.episense.fhirgenerator.config.ExternalApiProperties",
+      "description": "Configuration properties for external API integration."
+    },
+    {
+      "name": "scheduler",
+      "type": "com.episense.fhirgenerator.config.SchedulerProperties",
+      "sourceType": "com.episense.fhirgenerator.config.SchedulerProperties",
+      "description": "Configuration properties for the hemograma generation scheduler."
+    }
+  ],
+  "properties": [
+    {
+      "name": "external.api.url",
+      "type": "java.lang.String",
+      "description": "URL endpoint of the external API where FHIR hemograma bundles will be sent.",
+      "defaultValue": "http://localhost:5000/api/ingestion/fhir"
+    },
+    {
+      "name": "external.api.timeout",
+      "type": "java.lang.Long",
+      "description": "Timeout in milliseconds for HTTP requests to the external API.",
+      "defaultValue": 30000
+    },
+    {
+      "name": "scheduler.enabled",
+      "type": "java.lang.Boolean",
+      "description": "Enable or disable the automatic hemograma generation scheduler.",
+      "defaultValue": true
+    },
+    {
+      "name": "scheduler.initial-delay",
+      "type": "java.lang.Long",
+      "description": "Initial delay in milliseconds before the first scheduler execution.",
+      "defaultValue": 60000
+    },
+    {
+      "name": "scheduler.min-interval-minutes",
+      "type": "java.lang.Integer",
+      "description": "Minimum interval in minutes between scheduler executions.",
+      "defaultValue": 3
+    },
+    {
+      "name": "scheduler.max-interval-minutes",
+      "type": "java.lang.Integer",
+      "description": "Maximum interval in minutes between scheduler executions.",
+      "defaultValue": 10
+    },
+    {
+      "name": "scheduler.min-batch-size",
+      "type": "java.lang.Integer",
+      "description": "Minimum number of hemogramas to generate in each batch.",
+      "defaultValue": 20
+    },
+    {
+      "name": "scheduler.max-batch-size",
+      "type": "java.lang.Integer",
+      "description": "Maximum number of hemogramas to generate in each batch.",
+      "defaultValue": 100
+    }
+  ],
+  "hints": [
+    {
+      "name": "external.api.url",
+      "values": [
+        {
+          "value": "http://localhost:5000/api/ingestion/fhir",
+          "description": "Local development endpoint."
+        },
+        {
+          "value": "https://api.episense.com/api/ingestion/fhir",
+          "description": "Production endpoint."
+        }
+      ]
+    },
+    {
+      "name": "scheduler.enabled",
+      "values": [
+        {
+          "value": true,
+          "description": "Enable automatic generation (recommended for production)."
+        },
+        {
+          "value": false,
+          "description": "Disable automatic generation (for testing or maintenance)."
+        }
+      ]
+    },
+    {
+      "name": "scheduler.min-interval-minutes",
+      "values": [
+        {
+          "value": "3",
+          "description": "Generate hemogramas every 3 minutes minimum."
+        },
+        {
+          "value": "1",
+          "description": "Fast testing mode (1 minute)."
+        }
+      ]
+    },
+    {
+      "name": "scheduler.max-interval-minutes",
+      "values": [
+        {
+          "value": "10",
+          "description": "Generate hemogramas every 10 minutes maximum."
+        },
+        {
+          "value": "3",
+          "description": "Fast testing mode (3 minutes)."
+        }
+      ]
+    }
+  ]
+}
