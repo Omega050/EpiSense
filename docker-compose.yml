@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   # MongoDB - Backend Storage
   mongodb:
@@ -20,7 +18,7 @@ services:
       timeout: 10s
       retries: 3
 
-  # ScyllaDB - FHIR Generator Storage
+  # ScyllaDB - Shared Storage for FHIR Server & FHIR Generator
   scylladb:
     image: scylladb/scylla:latest
     container_name: episense-scylladb
@@ -29,8 +27,8 @@ services:
       - "9042:9042"
     volumes:
       - scylla_data:/var/lib/scylla
-      - ./fhir-generator/src/main/resources/schema.cql:/schema.cql:ro
-    command: --smp 1 --memory 512M
+      - ./docker-init/init-scylla.cql:/init-scylla.cql:ro
+    command: --smp 2 --memory 2048M
     networks:
       - episense-network
     healthcheck:
@@ -39,7 +37,7 @@ services:
       timeout: 10s
       retries: 5
 
-  # ScyllaDB Schema Initializer
+  # ScyllaDB Schema Initializer - Unified for both FHIR Server and FHIR Generator
   scylladb-init:
     image: cassandra:latest
     container_name: episense-scylladb-init
@@ -47,14 +45,14 @@ services:
       scylladb:
         condition: service_healthy
     volumes:
-      - ./fhir-generator/src/main/resources/schema.cql:/schema.cql:ro
+      - ./docker-init/init-scylla.cql:/init-scylla.cql:ro
     entrypoint: >
       sh -c "
         echo 'Waiting for ScyllaDB to be fully ready...' &&
         sleep 10 &&
-        echo 'Executing schema...' &&
-        cqlsh scylladb -f /schema.cql &&
-        echo 'Schema executed successfully!'
+        echo 'Executing unified schema for FHIR Server and FHIR Generator...' &&
+        cqlsh scylladb -f /init-scylla.cql &&
+        echo 'Unified schema executed successfully!'
       "
     networks:
       - episense-network
@@ -80,6 +78,55 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  # FHIR Server - Servidor de ingestão FHIR
+  fhir-server:
+    build:
+      context: ./fhir-server
+      dockerfile: Dockerfile
+    image: fhir-server:latest
+    container_name: episense-fhir-server
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    env_file:
+      - ./fhir-server/.env
+    depends_on:
+      scylladb-init:
+        condition: service_completed_successfully
+    networks:
+      - episense-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/api/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  # FHIR Generator - Gerador de dados FHIR
+  fhir-generator:
+    build:
+      context: ./fhir-generator
+      dockerfile: Dockerfile
+    image: fhir-generator:latest
+    container_name: episense-fhir-generator
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on:
+      fhir-server:
+        condition: service_healthy
+    networks:
+      - episense-network
+    healthcheck:
+      test:
+        ["CMD", "curl", "-f", "http://localhost:8080/api/v1/hemograma/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 40s
 
 volumes:
   mongodb_data:
