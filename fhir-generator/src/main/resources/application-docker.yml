@@ -1,0 +1,15 @@
+spring:
+  cassandra:
+    contact-points: scylladb
+    keyspace-name: fhir_generator
+    port: 9042
+    local-datacenter: datacenter1
+
+external:
+  api:
+    url: http://fhir-server:8081/api/fhir
+
+logging:
+  level:
+    root: INFO
+    com.episense.fhirgenerator: INFO
