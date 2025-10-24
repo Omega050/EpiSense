@@ -1,0 +1,59 @@
+[package]
+name = "fhir-server"
+version = "0.1.0"
+edition = "2021"
+authors = ["EpiSense Team"]
+
+[dependencies]
+# Actix Web - Framework HTTP assíncrono
+actix-web = "4.5"
+actix-rt = "2.9"
+
+# ScyllaDB/Cassandra driver
+scylla = { version = "0.12", features = ["cloud"] }
+
+# Async runtime
+tokio = { version = "1.36", features = ["full"] }
+
+# Serialização/Deserialização
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# HTTP Client para envio ao backend
+reqwest = { version = "0.11", features = ["json"] }
+
+# UUID
+uuid = { version = "1.7", features = ["v4", "serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Configuração
+dotenv = "0.15"
+envy = "0.4"
+
+# Métricas Prometheus
+prometheus = { version = "0.13", features = ["process"] }
+actix-web-prometheus = "0.1"
+
+# Utilitários
+anyhow = "1.0"
+thiserror = "1.0"
+bytes = "1.5"
+futures = "0.3"
+
+# Retry com backoff
+tokio-retry = "0.3"
+
+# Chrono para timestamp
+chrono = { version = "0.4", features = ["serde"] }
+
+# Lazy static para métricas globais
+lazy_static = "1.4"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
