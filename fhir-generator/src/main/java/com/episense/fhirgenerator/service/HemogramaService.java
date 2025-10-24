@@ -72,12 +72,8 @@ public class HemogramaService {
     }
 
     public void markAsSent(UUID id, int statusCode) {
-        hemogramaRepository.findById(id).ifPresent(hemograma -> {
-            hemograma.setSentToApi(true);
-            hemograma.setSentAt(Instant.now());
-            hemograma.setApiResponseStatus(statusCode);
-            hemogramaRepository.save(hemograma);
-        });
+        log.debug("Marking hemograma {} as sent with status code {}", id, statusCode);
+        hemogramaRepository.updateSentStatus(id, true, Instant.now(), statusCode);
     }
 
     public List<Hemograma> findByPatientId(String patientId) {
