@@ -1,6 +1,6 @@
 # ADR 008: Comunicação Inter-Módulos via Callback Pattern
 
-**Status:** Aceito
+**Status:** Obsoleta (Substituído pela ADR-010)
 
 **Contexto:**
 Com a decisão de adiar a implementação de comunicação event-driven (ADR-003 está Pendente) para evitar complexidade prematura, precisamos de uma forma de comunicação entre os módulos Ingestion e Analysis que permita:

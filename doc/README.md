@@ -21,6 +21,7 @@ A pasta `architecture-decision-records` registra as principais decisões arquite
 | [`adr-007`](architecture-decision-records\adr-007-padrao-repository-especifico-por-contexto.md) | Padrão Repository específico por contexto sem abstração genérica | Aceito |
 | [`adr-008`](architecture-decision-records\adr-008-comunicacao-inter-modulos-via-callback.md) | Comunicação inter-módulos via Callback Pattern (estratégia transitória) | Aceito |
 | [`adr-009`](architecture-decision-records\adr-009-resiliencia-postgresql-retry-policy.md) | Resiliência de conexão PostgreSQL com Retry Policy | Aceito |
+| [`adr-010`](architecture-decision-records\adr-010-processamento-assincrono-hangfire.md) | Processamento assíncrono e jobs agendados com Hangfire para análises e agregações | Aceito |
 
 ## Diagramas
 

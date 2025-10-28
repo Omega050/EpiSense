@@ -32,7 +32,7 @@ O poder do EpiSense não está em analisar um único exame, mas em identificar o
 ## Atributos de Qualidade
 
 1. **Segurança:** A proteção dos dados de saúde é uma restrição inegociável e, portanto, uma prioridade máxima.
-2. **Confiabilidade:** A precisão dos alertas é a missão crítica. O sistema deve ser confiável para que as decisões tomadas com base nele sejam seguras.
+2. **Observabilidade:** Capacidade de rastrear, monitorar e diagnosticar o fluxo de processamento em tempo real, garantindo visibilidade completa sobre ingestão, análise e detecção de anomalias para decisões epidemiológicas confiáveis.
 3. **Reusabilidade:** O sistema deve ser extensível para outros cenários de detecção.
 4. **Escalabilidade:** A arquitetura deve ser capaz de suportar um volume crescente de exames de múltiplas fontes sem degradação da performance.
 5. **Disponibilidade:** A natureza de tempo real do sistema exige que os componentes de recepção e análise estejam sempre operacionais.

@@ -1,6 +1,6 @@
 # ADR 002: Uso do MongoDB com Driver Nativo para Persistência
 
-**Status:** Desatualizado (Substituído pela ADR-006)
+**Status:** Obsoleta (Substituído pela ADR-006)
 
 **Contexto:**
 O projeto EpiSense precisa de um banco de dados para armazenar os hemogramas recebidos (recursos FHIR `Observation`) e os alertas gerados. O sistema necessita realizar análises complexas em janelas de tempo deslizantes para detectar padrões coletivos. A flexibilidade do esquema é desejável, já que o padrão FHIR é baseado em documentos JSON. A decisão precisava ser validada no Marco 3.
