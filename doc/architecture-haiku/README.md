@@ -30,12 +30,13 @@ O poder do EpiSense não está em analisar um único exame, mas em identificar o
 * Não armazenar dados pessoais identificáveis (PII - Personally Identifiable Information).
 
 ## Atributos de Qualidade
-
-1. **Segurança:** A proteção dos dados de saúde é uma restrição inegociável e, portanto, uma prioridade máxima.
-2. **Observabilidade:** Capacidade de rastrear, monitorar e diagnosticar o fluxo de processamento em tempo real, garantindo visibilidade completa sobre ingestão, análise e detecção de anomalias para decisões epidemiológicas confiáveis.
-3. **Reusabilidade:** O sistema deve ser extensível para outros cenários de detecção.
-4. **Escalabilidade:** A arquitetura deve ser capaz de suportar um volume crescente de exames de múltiplas fontes sem degradação da performance.
-5. **Disponibilidade:** A natureza de tempo real do sistema exige que os componentes de recepção e análise estejam sempre operacionais.
+1. **Segurança:** Proteção de dados de saúde como restrição inegociável — anonimização/pseudonimização, criptografia em trânsito e em repouso, autenticação mTLS, controle de acesso (RBAC/least privilege), logs de auditoria e políticas de retenção/eliminação para minimizar risco de exposição de PII.
+2. **Confiabilidade:** Precisão e robustez das detecções e alertas — validação de entradas, garantias de integridade e idempotência do processamento, testes automatizados (unit/integration), monitoramento de deriva de dados e mecanismos de fallback para degradação graciosa.
+3. **Observabilidade:** Visibilidade end-to-end via logs estruturados (redigidos), métricas de negócio e infra, tracing distribuído e dashboards (ex.: Hangfire) que permitam verificar o fluxo e saúde dos pipelines sem expor dados sensíveis — usar agregação, hashing/redaction e métricas agregadas em vez de payloads brutos.
+4. **Disponibilidade:** Alta disponibilidade por meio de retry policies, processamento assíncrono resiliente (Hangfire), workers paralelos e tolerância a falhas transitórias.
+5. **Extensibilidade:** Arquitetura modular e event-driven que permite adicionar novos algoritmos, flags clínicas, contextos analíticos e tipos de eventos com baixo acoplamento.
+6. **Manutenibilidade:** DDD com Bounded Contexts, separação clara de responsabilidades, cobertura de testes, documentação e observabilidade que facilitam a evolução segura do sistema.
+7. **Escalabilidade:** Monólito modular projetado para crescimento (scaling vertical e otimizações) com caminho claro para decomposição em microsserviços conforme demanda.
 
 ## Decisões de Design de Alto Nível
 
