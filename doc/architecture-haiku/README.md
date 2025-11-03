@@ -26,17 +26,24 @@ O poder do EpiSense não está em analisar um único exame, mas em identificar o
 ## Restrições Inegociáveis
 
 * Uso obrigatório do padrão HL7 FHIR versão R4.
-* Comunicação entre sistemas via HTTPS com autenticação mTLS (mutual TLS).
+* Comunicação via HTTPS com autenticação obrigatória.
 * Não armazenar dados pessoais identificáveis (PII - Personally Identifiable Information).
 
 ## Atributos de Qualidade
-1. **Segurança:** Proteção de dados de saúde como restrição inegociável — anonimização/pseudonimização, criptografia em trânsito e em repouso, autenticação mTLS, controle de acesso (RBAC/least privilege), logs de auditoria e políticas de retenção/eliminação para minimizar risco de exposição de PII.
-2. **Confiabilidade:** Precisão e robustez das detecções e alertas — validação de entradas, garantias de integridade e idempotência do processamento, testes automatizados (unit/integration), monitoramento de deriva de dados e mecanismos de fallback para degradação graciosa.
-3. **Observabilidade:** Visibilidade end-to-end via logs estruturados (redigidos), métricas de negócio e infra, tracing distribuído e dashboards (ex.: Hangfire) que permitam verificar o fluxo e saúde dos pipelines sem expor dados sensíveis — usar agregação, hashing/redaction e métricas agregadas em vez de payloads brutos.
-4. **Disponibilidade:** Alta disponibilidade por meio de retry policies, processamento assíncrono resiliente (Hangfire), workers paralelos e tolerância a falhas transitórias.
-5. **Extensibilidade:** Arquitetura modular e event-driven que permite adicionar novos algoritmos, flags clínicas, contextos analíticos e tipos de eventos com baixo acoplamento.
-6. **Manutenibilidade:** DDD com Bounded Contexts, separação clara de responsabilidades, cobertura de testes, documentação e observabilidade que facilitam a evolução segura do sistema.
-7. **Escalabilidade:** Monólito modular projetado para crescimento (scaling vertical e otimizações) com caminho claro para decomposição em microsserviços conforme demanda.
+
+1. **Privacidade:** Proteção de dados de saúde através de anonimização/pseudonimização (não armazenar PII), controle de acesso via ASP.NET Core Identity (autenticação na API de ingestão e app móvel de gestores) e políticas de retenção de dados brutos para minimizar risco de exposição.
+
+2. **Confiabilidade:** Precisão e robustez das detecções — validação de entradas FHIR, garantias de integridade e idempotência do processamento, testes automatizados (unit/integration) e mecanismos de fallback para degradação graciosa.
+
+3. **Observabilidade:** Visibilidade operacional end-to-end via logs estruturados com redação de dados sensíveis, métricas de negócio (ex.: taxa de SIB detectada, tempo médio de análise) e dashboards (Hangfire) para monitorar fluxo e saúde dos pipelines sem expor dados individuais.
+
+4. **Disponibilidade:** Alta disponibilidade por meio de retry policies (PostgreSQL/MongoDB), processamento assíncrono resiliente (Hangfire), workers paralelos e tolerância a falhas transitórias.
+
+5. **Extensibilidade:** Arquitetura modular (Bounded Contexts) que permite adicionar novos algoritmos de detecção, flags clínicas, contextos analíticos e regras epidemiológicas com baixo acoplamento entre módulos.
+
+6. **Manutenibilidade:** DDD com separação clara de responsabilidades, cobertura de testes e documentação arquitetural (ADRs, diagramas C4) que facilitam a evolução segura do sistema.
+
+7. **Escalabilidade:** Monólito modular projetado para crescimento vertical (otimizações de queries, índices, caching) com caminho claro para decomposição em microsserviços conforme demanda.
 
 ## Decisões de Design de Alto Nível
 
