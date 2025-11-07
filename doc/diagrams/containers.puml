@@ -14,13 +14,15 @@ System_Boundary(episense_system, "Sistema EpiSense") {
   Container(monolith, "Aplicação EpiSense", "ASP.NET Core (.NET 8)", "Processo único: expõe API REST, realiza análise e gera alertas. Módulos internos comunicam-se via eventos in-memory (MediatR).")
 
   ' Armazenamentos (Database per Service lógico)
-  ContainerDb(analysis_db, "Banco de Análise", "MongoDB", "Dados brutos e agregados analíticos.")
+  ContainerDb(ingestion_db, "Banco de Ingestão", "MongoDB", "Dump de dados brutos FHIR.")
+  ContainerDb(analysis_db, "Banco de Análise", "PostgreSQL", "Dados analíticos estruturados (resumos, flags clínicas).")
   ContainerDb(alerts_db, "Banco de Alertas", "MongoDB", "Alertas para consulta e auditoria.")
 }
 
 ' Relações (fluxos principais)
 Rel(fhir_server, monolith, "Envia lotes de hemogramas", "HTTPS/mTLS")
-Rel(monolith, analysis_db, "Persiste dados brutos e agregados", "")
+Rel(monolith, ingestion_db, "Armazena dados brutos (dump)", "")
+Rel(monolith, analysis_db, "Persiste dados analíticos", "")
 Rel(manager, monolith, "Consulta alertas", "HTTPS/REST")
 Rel(monolith, alerts_db, "Grava e lê alertas", "")
 Rel(monolith, fcm, "Dispara notificações", "HTTPS")

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using EpiSense.Analysis.Infrastructure;
-
+using EpiSense.Analysis.Services;
 namespace EpiSense.Api.Controllers;
 
 [ApiController]
@@ -8,11 +8,14 @@ namespace EpiSense.Api.Controllers;
 public class AnalysisController : ControllerBase
 {
     private readonly IAnalysisRepository _repository;
+    private readonly AggregationService _aggregationService;
 
-    public AnalysisController(IAnalysisRepository repository)
+    public AnalysisController(IAnalysisRepository repository, AggregationService aggregationService)
     {
         _repository = repository;
+        _aggregationService = aggregationService;
     }
+
 
     /// <summary>
     /// Retorna todas as observações analisadas com suas flags clínicas
@@ -59,5 +62,11 @@ public class AnalysisController : ControllerBase
                 Details = ex.InnerException?.Message
             });
         }
+    }
+    [HttpPost("aggregations/rebuild")]
+    public async Task<IActionResult> RebuildAggregations()
+    {
+        await _aggregationService.RebuildAllAggregationsAsync();
+        return Accepted(new { message = "Reconstrução iniciada" });
     }
 }

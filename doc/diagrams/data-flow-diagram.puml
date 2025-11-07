@@ -22,22 +22,22 @@ state "Dado Inicial" as Initial {
 
 state "Dado Bruto Armazenado" as Raw {
     state "**Formato:** Documento Hemograma (BSON)"
-    state "**Persistência:** Coleção `observations` no MongoDB"
+    state "**Persistência:** Coleção `observations` no MongoDB (Dump)"
     note right
         O dado foi validado, parseado e
-        enriquecido. É a nossa fonte da
-        verdade para reanálises futuras.
+        enriquecido. Armazenado como dump
+        para possíveis reanálises futuras.
     end note
 }
 
 state "Dado Agregado" as Aggregated {
-    state "**Formato:** Documento Analítico (BSON)"
-    state "**Persistência:** Coleção `analytics_aggregates` no MongoDB"
+    state "**Formato:** Dados Analíticos Estruturados"
+    state "**Persistência:** PostgreSQL (ObservationSummary, flags clínicas)"
     note left
         Resultado do processamento agendado
         pelo **Módulo de Análise**.
-        Ex: Média de plaquetas para a região X
-        na última hora.
+        Ex: Resumos de observações, detecção
+        de flags clínicas (LEUCOPENIA, etc.).
     end note
 }
 

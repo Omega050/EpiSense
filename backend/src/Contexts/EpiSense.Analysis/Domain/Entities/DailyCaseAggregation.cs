@@ -10,6 +10,9 @@ namespace EpiSense.Analysis.Domain.Entities;
 /// IMPORTANTE: Apenas flags do tipo Clinical (ClinicalFlags.Clinical.*) são agregadas aqui.
 /// Flags laboratoriais (ClinicalFlags.Laboratory.*) são ignoradas na agregação.
 /// 
+/// DECISÃO ARQUITETURAL (ADR-011):
+/// Casos SIB_GRAVE são agregados como SIB_SUSPEITA para simplificação epidemiológica.
+/// Portanto, o campo 'flag' sempre conterá "SIB_SUSPEITA" (não haverá registros com "SIB_GRAVE").
 /// </summary>
 [Table("daily_case_aggregations")]
 public class DailyCaseAggregation

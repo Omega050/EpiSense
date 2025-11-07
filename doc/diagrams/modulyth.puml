@@ -1,41 +1,108 @@
 @startuml modular-monolith
 !theme vibrant
-skinparam handwritten true
 skinparam backgroundColor White
 skinparam componentStyle rectangle
-skinparam defaultTextAlignment center
+skinparam defaultTextAlignment left
 skinparam shadowing false
 
-title Arquitetura: Monólito Modular
+title EpiSense - Bounded Contexts (Monólito Modular DDD)
 
-frame "Processo Único de Deploy (Monólito)" {
-    component "API Gateway" as API
-
-    package "Módulo: Análise de Dados" #AliceBlue {
-        component [Analysis Engine]
-        component [Lógica de Persistência\n(Análise)]
+frame "Processo Único (.NET 8 - Monólito)" {
+    
+    component "API Layer" as API #LightSteelBlue {
+        [Controllers]
+        [Background Jobs\n(Hangfire)]
     }
 
-    package "Módulo: Gestão de Alertas" #LightGreen {
-        component [Alert Service]
-        component [Lógica de Persistência\n(Alertas)]
+    rectangle "Contextos Delimitados (Bounded Contexts)" {
+        
+        package "BC: Ingestion Context" #PeachPuff {
+            [IngestionService]
+            [FHIR Validation]
+            component "Repository" as IngestionRepo
+            database "MongoDB\n(Dump FHIR)" as MongoIngestion
+            
+            IngestionRepo --> MongoIngestion
+        }
+
+        package "BC: Analysis Context" #AliceBlue {
+            component "Individual Analysis" as IndivAnalysis {
+                [FhirAnalysisService]
+                [Anonimização]
+                [Detecção SIB]
+            }
+            
+            component "Quantitative Analysis" as QuantAnalysis {
+                [ObservationAnalysisService]
+                [Triggers (Shewhart)]
+                [Agregações]
+            }
+            
+            component "Repository" as AnalysisRepo
+            database "PostgreSQL\n(ObservationSummary\nDailyCaseAggregation)" as PostgresAnalysis
+            
+            AnalysisRepo --> PostgresAnalysis
+        }
+
+        package "BC: Alerts Context" #LightGreen {
+            [AlertService]
+            [Notification Engine]
+            component "Repository" as AlertsRepo
+            database "MongoDB\n(Alertas)" as MongoAlerts
+            
+            AlertsRepo --> MongoAlerts
+        }
     }
 
-    component "Mediador / Barramento\n(In-Memory)" as Mediator
+    component "MediatR\n(Event Bus In-Memory)" as Mediator #LightGoldenRodYellow
 }
 
-' Comunicação Interna (Desacoplada, dentro do mesmo processo)
-[Analysis Engine] ..> Mediator : 1. Publica Evento\n   ('PadraoDetectadoEvent')
-Mediator ..> [Alert Service] : 2. Notifica Assinante
+' Fluxo de orquestração da API
+API --> IngestionService : 1. Ingest FHIR
+API --> [Background Jobs\n(Hangfire)] : 2. Enqueue Analysis
 
-API --> [Analysis Engine]
-API --> [Alert Service]
+' Fluxo de processamento assíncrono
+[Background Jobs\n(Hangfire)] --> IndivAnalysis : 3. Process Individual
 
-note as N1
-    **Fronteiras Lógicas, Deploy Físico Único**
-    - Cada módulo é um projeto (.csproj) separado.
-    - Comunicação entre módulos **apenas** via Mediador.
-    - Prepara a migração futura para microsserviços.
+' Fluxo de triggers periódicos
+QuantAnalysis ..> AnalysisRepo : Reads/Writes
+IndivAnalysis --> AnalysisRepo : Writes
+
+' Comunicação entre contextos via eventos
+IndivAnalysis ..> Mediator : Publica:\nObservationProcessedEvent\nAnomalyDetectedEvent
+QuantAnalysis ..> Mediator : Publica:\nOutbreakDetectedEvent
+Mediator ..> AlertService : Subscribe:\nEventos de Domínio
+
+' Persistência por contexto
+IngestionService --> IngestionRepo
+AlertService --> AlertsRepo
+
+note right of Mediator
+    **Comunicação Inter-Contextos**
+    - Event-Carried State Transfer (E-CST)
+    - Contextos não se chamam diretamente
+    - Apenas via eventos de domínio
+    - ADR-003, ADR-008
+end note
+
+note bottom of "BC: Analysis Context"
+    **Duas Responsabilidades:**
+    1. Análise Individual (FHIR → ObservationSummary)
+       - Anonimização, flags clínicas (SIB)
+    2. Análise Quantitativa (em implementação)
+       - Shewhart, agregações, anomalias
+end note
+
+note as DeployNote
+    **Bounded Contexts = Projetos .csproj separados**
+    - EpiSense.Ingestion
+    - EpiSense.Analysis
+    - EpiSense.Alerts
+    - EpiSense.Shared (Value Objects comuns)
+    
+    **Database per Service (lógico)**
+    - MongoDB: Ingestion (dump) + Alerts
+    - PostgreSQL: Analysis (structured + JSONB)
 end note
 
 @enduml
