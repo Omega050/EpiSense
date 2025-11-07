@@ -40,7 +40,9 @@ builder.Services.AddScoped<IEventPublisher, ConsoleEventPublisher>();
 // Serviços de Análise
 builder.Services.AddScoped<IAnalysisRepository, AnalysisRepository>();
 builder.Services.AddScoped<FhirAnalysisService>();
+builder.Services.AddScoped<AggregationService>();
 builder.Services.AddScoped<AnalysisJob>();
+builder.Services.AddScoped<AggregationJob>();
 
 // Configuração Hangfire para processamento assíncrono
 builder.Services.AddHangfire(config => config
@@ -97,5 +99,12 @@ app.UseHangfireDashboard("/hangfire", new DashboardOptions
 app.MapControllers();
 
 app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
+
+// Registrar jobs recorrentes no Hangfire
+RecurringJob.AddOrUpdate<AggregationJob>(
+    "agregacao-diaria",           // Nome do job
+    job => job.ExecuteAsync(),    // Qual método executar
+    Cron.Daily(2)                 // QUANDO: todo dia às 2h
+);
 
 app.Run();

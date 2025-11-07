@@ -1,30 +1,75 @@
 # EpiSense
 
-Initial scaffold focused on the backend API and documentation.
+**EpiSense** é um sistema inteligente de vigilância epidemiológica desenvolvido para transformar o fluxo contínuo de hemogramas em **inteligência epidemiológica acionável**. O sistema detecta padrões coletivos em dados de saúde populacional para antecipar respostas a crises de saúde pública como surtos virais, bacterianos ou eventos ambientais.
 
-- Backend: .NET 8 minimal API in `backend/` with `/health` endpoint
-- Docs: ADRs and architecture notes in `doc/`
+## 🎯 Proposta de Valor
 
-## Quickstart
+O poder do EpiSense está em identificar o sinal fraco de uma crise iminente a partir de dados populacionais em tempo real, indo muito além da análise de exames individuais:
 
-- Build backend: dotnet build backend/EpiSense.sln -c Release
-- Run backend: dotnet run --project backend/src/EpiSense.Api
-- Docker: docker build -t episense-api:dev -f backend/Dockerfile backend
+- **📈 Sinalização Preditiva:** Detecta o início de eventos de saúde coletiva antes que se tornem epidemias
+- **🗺️ Contexto Geográfico:** Correlaciona anomalias laboratoriais com regiões específicas (municípios, bairros)
+- **🔬 Análise Inteligente:** Processa dados FHIR com algoritmos de controle estatístico (Shewhart, CUSUM)
+- **🚨 Alertas Precoces:** Identifica surtos bacterianos através de leucocitose e neutrofilia em tempo real
 
-## Backlog do Projeto
+### Cenários de Detecção
 
-A tabela abaixo representa as próximas etapas de desenvolvimento, organizadas em épicos para construir o sistema de forma incremental.
+- **Surto Bacteriano Local:** Aumento anormal de leucócitos em uma região específica
+- **Infecção Bacteriana (SIB):** Leucocitose e neutrofilia em múltiplos exames
+- **Mudanças Graduais:** Detecção de shifts sutis em padrões populacionais
 
-| Épico | Tarefa | Prioridade | Status |
-| :--- | :--- | :--- | :--- |
-| **1. Pipeline de Ingestão** | Implementar `SubscriptionController` para receber notificações FHIR. | Alta | A Fazer |
-| **1. Pipeline de Ingestão** | Implementar `IFhirClient` para comunicação real com o servidor FHIR. | Alta | A Fazer |
-| **1. Pipeline de Ingestão** | Implementar o parsing do JSON FHIR em `Hemograma.FromFhirJson`. | Alta | A Fazer |
-| **1. Pipeline de Ingestão** | Implementar `IRawDataRepository` com o driver do MongoDB (ADR-002). | Alta | A Fazer |
-| **2. Análise e Alertas** | Desenvolver o Módulo de Análise (regras de desvio). | Média | A Fazer |
-| **2. Análise e Alertas** | Desenvolver o Módulo de Alertas (entidade e serviço). | Média | A Fazer |
-| **2. Análise e Alertas** | Implementar a API de Alertas (`GET /api/alerts`). | Média | A Fazer |
-| **3. Qualidade e Segurança** | Implementar autenticação mTLS nos endpoints da API. | Alta | A Fazer |
-| **3. Qualidade e Segurança** | Adicionar testes de integração para o fluxo de ingestão. | Média | A Fazer |
-| **3. Qualidade e Segurança** | Adicionar testes unitários para entidades e serviços. | Baixa | A Fazer |
-| **3. Qualidade e Segurança** | Configurar um endpoint de Health Check (`/health`). | Baixa | **Concluído** ✅ |
+## 🏗️ Arquitetura
+
+EpiSense é construído como um **monólito modular** com contextos claramente delimitados:
+
+- **Backend:** .NET 8 com arquitetura DDD (Domain-Driven Design)
+- **Persistência Híbrida:** PostgreSQL (análises/agregações) + MongoDB (dados brutos)
+- **Processamento Assíncrono:** Hangfire para jobs agendados e análises em background
+- **Padrão FHIR R4:** Conformidade total com HL7 FHIR para interoperabilidade
+
+Para mais detalhes, consulte a [documentação arquitetural](doc/README.md) e os [Architecture Decision Records](doc/architecture-decision-records/).
+
+## 🚀 Quickstart
+
+### Pré-requisitos
+
+- .NET 8 SDK
+- Docker e Docker Compose
+- PostgreSQL 16+
+- MongoDB 7+
+
+### Executando Localmente
+
+```bash
+# 1. Iniciar infraestrutura (PostgreSQL, MongoDB)
+docker-compose up -d
+
+# 2. Build do backend
+dotnet build backend/EpiSense.sln -c Release
+
+# 3. Executar API
+dotnet run --project backend/src/Apps/EpiSense.Api
+
+# 4. Acessar endpoints
+# - API: http://localhost:5000
+# - Health: http://localhost:5000/health
+# - Hangfire Dashboard: http://localhost:5000/hangfire
+```
+
+### Docker
+
+```bash
+docker build -t episense-api:dev -f backend/Dockerfile backend
+docker run -p 5000:8080 episense-api:dev
+```
+
+## 📖 Documentação
+
+- **[Architecture Haiku](doc/architecture-haiku/)** - Visão de alto nível da arquitetura
+- **[ADRs](doc/architecture-decision-records/)** - Decisões arquiteturais documentadas
+- **[Diagramas](doc/diagrams/)** - Diagramas C4 e fluxos de dados
+- **[ROADMAP](doc/ROADMAP.md)** - Planejamento de iterações
+
+
+---
+
+**EpiSense** é um exemplo de como tecnologia e dados podem ser utilizados para proteger a saúde pública através de vigilância epidemiológica inteligente e acionável

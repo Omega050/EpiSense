@@ -22,6 +22,7 @@ A pasta `architecture-decision-records` registra as principais decisões arquite
 | [`adr-008`](architecture-decision-records\adr-008-comunicacao-inter-modulos-via-callback.md) | Comunicação inter-módulos via Callback Pattern (estratégia transitória) | Aceito |
 | [`adr-009`](architecture-decision-records\adr-009-resiliencia-postgresql-retry-policy.md) | Resiliência de conexão PostgreSQL com Retry Policy | Aceito |
 | [`adr-010`](architecture-decision-records\adr-010-processamento-assincrono-hangfire.md) | Processamento assíncrono e jobs agendados com Hangfire para análises e agregações | Aceito |
+| [`adr-011`](architecture-decision-records\adr-011-agregacao-sib-grave-como-suspeita.md) | Agregação de SIB Grave como Suspeita para simplificação epidemiológica | Aceito |
 
 ## Diagramas
 
