@@ -8,7 +8,7 @@ namespace EpiSense.Analysis.Services;
 /// <summary>
 /// Serviço responsável por agregar dados de ObservationSummary em cache diário.
 /// 
-/// DECISÃO ARQUITETURAL (ADR-010):
+/// DECISÃO ARQUITETURAL (ADR-011):
 /// - Casos SIB_GRAVE são agregados como SIB_SUSPEITA (simplificação epidemiológica)
 /// - Apenas uma série temporal por município é mantida no cache
 /// - Dados brutos (observation_summaries) mantêm todas as flags originais
@@ -24,15 +24,17 @@ public class AggregationService
     
     public async Task RebuildAllAggregationsAsync()
     {
-        // Busca todas as observações com flags clínicas
+        // Busca TODAS as observações e filtra em memória
         var observations = await _context.ObservationSummaries
-            .Where(obs => obs.Flags.Any(f => 
-                f == ClinicalFlags.Clinical.SIB_SUSPEITA || 
-                f == ClinicalFlags.Clinical.SIB_GRAVE))
             .ToListAsync();
 
-        // Normaliza e agrega (ADR-010: SIB_GRAVE conta como SIB_SUSPEITA)
-        var aggregations = BuildAggregationsFromObservations(observations);
+        // Filtra apenas observações com SIB (suspeita ou grave)
+        var sibObservations = observations
+            .Where(obs => obs.HasSibSuspeita || obs.HasSibGrave)
+            .ToList();
+
+        // BuildAggregationsFromObservations normaliza e agrega
+        var aggregations = BuildAggregationsFromObservations(sibObservations);
         
         // Persiste no banco
         await UpsertDailyCaseAggregationsAsync(aggregations);
@@ -40,16 +42,18 @@ public class AggregationService
 
     public async Task UpdateDailyAggregationsAsync(DateTime targetDate)
     {
-        // Busca apenas observações do dia específico
+        // Busca observações do dia (filtro de data funciona no SQL)
         var observations = await _context.ObservationSummaries
             .Where(obs => obs.DataColeta.Date == targetDate.Date)
-            .Where(obs => obs.Flags.Any(f => 
-                f == ClinicalFlags.Clinical.SIB_SUSPEITA || 
-                f == ClinicalFlags.Clinical.SIB_GRAVE))
             .ToListAsync();
         
-        // Normaliza e agrega
-        var aggregations = BuildAggregationsFromObservations(observations);
+        // Filtra apenas observações com SIB (suspeita ou grave)
+        var sibObservations = observations
+            .Where(obs => obs.HasSibSuspeita || obs.HasSibGrave)
+            .ToList();
+        
+        // BuildAggregationsFromObservations normaliza e agrega
+        var aggregations = BuildAggregationsFromObservations(sibObservations);
         
         // Persiste no banco
         await UpsertDailyCaseAggregationsAsync(aggregations);
@@ -60,16 +64,18 @@ public class AggregationService
         DateTime startDate,
         DateTime endDate)
     {
-        // Busca observações no intervalo de datas
+        // Busca observações no intervalo (filtro de data funciona no SQL)
         var observations = await _context.ObservationSummaries
             .Where(obs => obs.DataColeta.Date >= startDate.Date && obs.DataColeta.Date <= endDate.Date)
-            .Where(obs => obs.Flags.Any(f => 
-                f == ClinicalFlags.Clinical.SIB_SUSPEITA || 
-                f == ClinicalFlags.Clinical.SIB_GRAVE))
             .ToListAsync();
         
-        // Normaliza e agrega
-        var aggregations = BuildAggregationsFromObservations(observations);
+        // Filtra apenas observações com SIB (suspeita ou grave)
+        var sibObservations = observations
+            .Where(obs => obs.HasSibSuspeita || obs.HasSibGrave)
+            .ToList();
+        
+        // BuildAggregationsFromObservations normaliza e agrega
+        var aggregations = BuildAggregationsFromObservations(sibObservations);
         
         // Persiste no banco
         await UpsertDailyCaseAggregationsAsync(aggregations);
@@ -78,26 +84,34 @@ public class AggregationService
     /// <summary>
     /// Constrói agregações a partir de observações brutas.
     /// 
-    /// LÓGICA (ADR-010):
-    /// 1. Normaliza flags: SIB_GRAVE → SIB_SUSPEITA
-    /// 2. Remove duplicatas por paciente (um paciente = um caso)
-    /// 3. Agrupa por (Município, Data, Flag)
-    /// 4. Conta total de casos por grupo
+    /// LÓGICA (ADR-011 + Peso para Casos Graves):
+    /// 1. Identifica casos SIB (suspeita ou grave)
+    /// 2. Casos GRAVES contam com PESO 2 (duplica o registro)
+    /// 3. Casos SUSPEITA contam com PESO 1 (registro único)
+    /// 4. Normaliza todas as flags para SIB_SUSPEITA
+    /// 5. Agrupa por (Município, Data, Flag) e conta
     /// </summary>
     private List<DailyCaseAggregation> BuildAggregationsFromObservations(
         List<ObservationSummary> observations)
     {
-        return observations
-            // Para cada observação, verifica se tem alguma flag clínica SIB
-            .Where(obs => obs.Flags.Any(f => 
-                f == ClinicalFlags.Clinical.SIB_SUSPEITA || 
-                f == ClinicalFlags.Clinical.SIB_GRAVE))
-            // Mapeia para a flag normalizada (ADR-010: tudo vira SIB_SUSPEITA)
+        // Expande casos graves para contarem 2x
+        var weightedObservations = observations
+            .SelectMany(obs => 
+            {
+                // Se for caso GRAVE, duplica (peso 2)
+                if (obs.HasSibGrave)
+                    return new[] { obs, obs };
+                
+                // Se for apenas SUSPEITA, mantém único (peso 1)
+                return new[] { obs };
+            });
+        
+        return weightedObservations
             .Select(obs => new
             {
                 Municipio = obs.CodigoMunicipioIBGE ?? "UNKNOWN",
                 Data = obs.DataColeta.Date, // Apenas data, sem hora
-                Flag = ClinicalFlags.Clinical.SIB_SUSPEITA // Sempre SIB_SUSPEITA (simplificado)
+                Flag = ClinicalFlags.Clinical.SIB_SUSPEITA // Sempre SIB_SUSPEITA (ADR-011)
             })
             // Agrupa por (Município, Data, Flag) e conta
             .GroupBy(x => new { x.Municipio, x.Data, x.Flag })
@@ -106,7 +120,7 @@ public class AggregationService
                 MunicipioIBGE = g.Key.Municipio,
                 Data = g.Key.Data,
                 Flag = g.Key.Flag,
-                TotalCasos = g.Count()
+                TotalCasos = g.Count() // Casos graves contam 2x
             })
             .ToList();
     }

@@ -2,7 +2,7 @@
 
 **Status:** Aceito  
 **Data:** 2025-11-05  
-**Contexto:** Análise e Agregação de Casos  
+**Contexto:** Análise e Agregação de Casos
 
 ---
 
