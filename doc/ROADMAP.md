@@ -1,176 +1,211 @@
-# 🚀 EpiSense - Roadmap de Implementação
+# 🚀 EpiSense - Histórico de Implementação e Roadmap
 
 ## 📋 Visão Geral
-Sistema de detecção de anomalias epidemiológicas com agregação de dados e alertas automatizados.
+Sistema de vigilância epidemiológica com detecção de Síndrome de Infecção Bacteriana (SIB) através de análise de dados FHIR e agregação temporal para detecção de anomalias.
 
 ---
 
-## 🔨 ITERAÇÃO 1: Sistema de Agregação (Base)
-**Objetivo:** Cache de contagens diárias por município/flag para consultas rápidas.
+## ✅ FUNCIONALIDADES IMPLEMENTADAS
 
-### 1.1 AggregationService
-**Arquivo:** `backend/src/Contexts/EpiSense.Analysis/Services/AggregationService.cs`
+### 🔬 **Pipeline de Ingestão de Dados FHIR** 
+**Implementado:** Setembro - Outubro 2025
 
-- [ ] Criar classe com injeção de `AnalysisDbContext` e `ILogger`
-- [ ] Implementar `UpdateDailyAggregationsAsync(DateTime targetDate)`
-  - Buscar `ObservationSummary` do dia (com `CodigoMunicipioIBGE != null`)
-  - Expandir apenas flags clínicas (`SUSPEITA_DENGUE`, `ANEMIA_FERROPRIVA`)
-  - Agrupar por (município, data, flag) e contar
-  - UPSERT em `DailyCaseAggregation`
-- [ ] Implementar `RebuildAllAggregationsAsync()` (mesma lógica, sem filtro de data)
-- [ ] Criar método auxiliar `IsValidClinicalFlag(string flag)`
+#### Componentes
+- ✅ **IngestionService** - Validação e persistência de recursos FHIR (`2025-09-12`)
+- ✅ **MongoIngestionRepository** - Armazenamento bruto de dados FHIR no MongoDB (`2025-09-12`)
+- ✅ **Validação FHIR** - Endpoint estruturado com validação de recursos (`2025-09-26`, ADR-005)
+- ✅ **Simplificação JSON Dump** - Refatoração para abordagem de dump direto (`2025-10-11`)
 
-### 1.2 AggregationCacheJob
-**Arquivo:** `backend/src/Apps/EpiSense.Api/Jobs/AggregationCacheJob.cs`
-
-- [ ] Criar job Hangfire com `[AutomaticRetry(Attempts = 3)]`
-- [ ] Implementar `UpdateDailyAggregations()` (processa dia anterior)
-- [ ] Implementar `RebuildAllAggregations()` (job manual)
-- [ ] Adicionar logs estruturados
-
-### 1.3 Registro no Program.cs
-- [ ] Registrar `AggregationService` e `AggregationCacheJob` como Scoped
-- [ ] Configurar Recurring Job (Hangfire) para execução diária às 2h UTC
-- [ ] Testar via `/hangfire` Dashboard
-
-### 1.4 Endpoint de Consulta
-**Arquivo:** `backend/src/Apps/EpiSense.Api/Controllers/AnalysisController.cs`
-
-- [ ] `GET /api/analysis/aggregations` (filtros: município, flag, datas)
-- [ ] `GET /api/analysis/aggregations/summary` (estatísticas gerais)
-
-**DONE quando:** Job roda automaticamente e endpoint retorna dados válidos.
+**Capacidades:**
+- Recepção de recursos FHIR R4 via endpoint `/api/ingestion`
+- Validação estrutural de recursos FHIR
+- Persistência em MongoDB para dados brutos
+- Suporte a recursos individuais e Bundles
 
 ---
 
-## 📊 ITERAÇÃO 2: Detecção de Anomalias - Shewhart
-**Objetivo:** Controle estatístico para detectar surtos epidemiológicos.
+### 🧬 **Análise Individual de Hemogramas (SIB Detection)**
+**Implementado:** Outubro 2025
 
-### 2.1 ShewhartAnalyzer
-**Arquivo:** `backend/src/Contexts/EpiSense.Analysis/Services/ShewhartAnalyzer.cs`
+#### Componentes
+- ✅ **FhirAnalysisService** - Análise de hemogramas e detecção de flags clínicas (`2025-10-22`)
+- ✅ **ObservationSummary Entity** - Modelo de dados para análises com flags (`2025-10-22`)
+- ✅ **AnalysisRepository** - Persistência PostgreSQL com migrations (`2025-10-18`)
+- ✅ **AnalysisJob** - Processamento assíncrono com Hangfire (`2025-10-18`)
+- ✅ **ClinicalFlags & Thresholds** - Definições de LOINC codes e limiares clínicos (`2025-10-22`)
 
-- [ ] Criar classe `ShewhartAnalyzer`
-- [ ] Implementar `AnalyzeAsync(string municipioIbge, string flag, int windowDays = 30)`
-  - Calcular média móvel e desvio padrão
-  - Calcular limites de controle (LCL, UCL = média ± 3σ)
-  - Aplicar regras de Western Electric (1 ponto > 3σ, 2/3 > 2σ, etc.)
-  - Retornar `ShewhartResult` com lista de anomalias
+**Capacidades:**
+- Detecção de **Leucocitose** (> 11.000/µL)
+- Detecção de **Neutrofilia** (> 7.500/µL)
+- Detecção de **Desvio à Esquerda** (bastões > 500/µL ou > 10%)
+- Classificação automática de **SIB_SUSPEITA** (Leucocitose + Neutrofilia)
+- Classificação automática de **SIB_GRAVE** (Neutrofilia + Desvio à Esquerda)
+- Extração de código de município (IBGE) de recursos FHIR
+- Suporte a recursos Bundle FHIR
 
-### 2.2 AnalysisResult Entity
-- [ ] Verificar/ajustar `Domain/Entities/AnalysisResult.cs`
-- [ ] Garantir campos: `MunicipioIBGE`, `Flag`, `AnalysisType`, `AnomalyDetected`, `Severity`, `Details` (JSONB)
-
-### 2.3 AnomalyDetectionJob
-**Arquivo:** `backend/src/Apps/EpiSense.Api/Jobs/AnomalyDetectionJob.cs`
-
-- [ ] Criar job `RunShewhartAnalysisAsync()`
-- [ ] Iterar sobre todos os municípios e flags
-- [ ] Executar análise e salvar resultados
-- [ ] Registrar como Recurring Job (após agregação, às 3h)
-
-### 2.4 Endpoint de Anomalias
-- [ ] `GET /api/analysis/anomalies` (filtros: município, flag, severidade)
-- [ ] `GET /api/analysis/anomalies/chart/{municipio}/{flag}` (dados para visualização)
-
-**DONE quando:** Shewhart detecta anomalia artificial injetada e salva em `AnalysisResult`.
+**ADRs Relacionados:**
+- ADR-006: Arquitetura Híbrida (MongoDB + PostgreSQL)
+- ADR-007: Repository Pattern específico por contexto
+- ADR-008: Comunicação inter-módulos via Callback
+- ADR-009: Resiliência PostgreSQL com Retry Policy
+- ADR-010: Processamento assíncrono com Hangfire
 
 ---
 
-## 📈 ITERAÇÃO 3: CUSUM Algorithm
-**Objetivo:** Detectar mudanças sutis e persistentes (shifts graduais).
+### 📊 **Sistema de Agregação Temporal (Cache Epidemiológico)**
+**Implementado:** Outubro - Novembro 2025
 
-### 3.1 CUSUMAnalyzer
-**Arquivo:** `backend/src/Contexts/EpiSense.Analysis/Services/CUSUMAnalyzer.cs`
+#### Componentes
+- ✅ **AggregationService** - Agregação diária de casos por município/flag (`2025-11-07`)
+- ✅ **DailyCaseAggregation Entity** - Modelo de cache temporal (`2025-10-23`)
+- ✅ **AggregationJob** - Job Hangfire para agregação recorrente (`2025-11-07`)
+- ✅ **Peso para Casos Graves** - SIB_GRAVE conta 2x na agregação (ADR-011, `2025-11-05`)
 
-- [ ] Implementar algoritmo CUSUM (h=5, k=0.5)
-- [ ] Detectar upward/downward shifts
-- [ ] Retornar `CUSUMResult` com anomalias
+**Capacidades:**
+- Agregação diária automatizada (executa às 2h UTC)
+- Cache de contagens por (Município, Data, Flag)
+- Sistema de peso: SIB_GRAVE = 2, SIB_SUSPEITA = 1
+- Normalização de flags: todos casos agregados como SIB_SUSPEITA
+- Métodos: `UpdateDailyAggregationsAsync()`, `RebuildAllAggregationsAsync()`, `UpdateAggregationsForDateRangeAsync()`
+- UPSERT automático para evitar duplicatas
 
-### 3.2 Integração
-- [ ] Adicionar `RunCUSUMAnalysisAsync()` ao `AnomalyDetectionJob`
-- [ ] Salvar com `AnalysisType = "CUSUM"`
-
-**DONE quando:** CUSUM detecta shift gradual que Shewhart não detecta.
-
----
-
-## 🚨 ITERAÇÃO 4: Sistema de Alertas
-**Objetivo:** Notificar autoridades quando anomalias forem detectadas.
-
-### 4.1 AlertService
-**Arquivo:** `backend/src/Contexts/EpiSense.Alerts/AlertService.cs`
-
-- [ ] Implementar `SendAnomalyAlertAsync(AnalysisResult result)`
-- [ ] Criar entidade `Alert` (tabela `alerts`)
-- [ ] Classificar severidade: LOW, MEDIUM, HIGH, CRITICAL (baseado em σ)
-- [ ] Canais: Log estruturado (imediato), Email/Webhook (futuro)
-
-### 4.2 Integração
-- [ ] Injetar `AlertService` no `AnomalyDetectionJob`
-- [ ] Disparar alerta após detecção (com debounce)
-
-### 4.3 AlertsController
-- [ ] `GET /api/alerts` (listar, paginado)
-- [ ] `GET /api/alerts/unacknowledged` (alertas pendentes)
-- [ ] `PUT /api/alerts/{id}/acknowledge` (marcar como visto)
-
-**DONE quando:** Alerta é criado automaticamente e endpoint funciona.
+**ADRs Relacionados:**
+- ADR-011: Agregação de SIB Grave como Suspeita (simplificação epidemiológica)
 
 ---
 
-## 📊 ITERAÇÃO 5: Dashboard
-**Objetivo:** Interface de monitoramento em tempo real.
+### 🏗️ **Infraestrutura e Ferramentas**
+**Implementado:** Setembro - Outubro 2025
 
-### 5.1 DashboardController
-**Arquivo:** `backend/src/Apps/EpiSense.Api/Controllers/DashboardController.cs`
+#### Componentes
+- ✅ **Docker Compose** - Orquestração de ambiente local (`2025-09-26`)
+- ✅ **FHIR Generator** - Gerador Java/Spring Boot de hemogramas sintéticos (`2025-10-22` - `2025-10-23`)
+- ✅ **FHIR Server (Rust)** - Servidor FHIR com ScyllaDB (`2025-10-24`)
+- ✅ **PostgreSQL Migrations** - Esquema de banco de dados versionado (`2025-10-18`)
+- ✅ **Hangfire Dashboard** - Monitoramento de jobs em `/hangfire` (`2025-10-18`)
+- ✅ **Health Checks** - Endpoint `/health` (`2025-09-26`)
 
-- [ ] `GET /api/dashboard/overview` (métricas gerais)
-- [ ] `GET /api/dashboard/trends` (séries temporais)
-- [ ] `GET /api/dashboard/map` (dados geográficos - GeoJSON)
-
-### 5.2 Frontend (Opcional)
-- [ ] React/Next.js + Recharts + Leaflet
-- [ ] Telas: Dashboard, Mapa de calor, Gráficos Shewhart, Lista de alertas
-
-**DONE quando:** Dashboard carrega < 2s e exibe dados reais.
+**Capacidades:**
+- Ambiente de desenvolvimento completo com Docker
+- Geração automatizada de dados FHIR para testes
+- Monitoramento visual de jobs e processamento
+- Persistência distribuída (PostgreSQL + MongoDB + ScyllaDB)
 
 ---
 
-## 🔧 ITERAÇÃO 6: Produção
-### 6.1 Performance
-- [ ] Índices compostos no PostgreSQL
+### 📱 **App Mobile (Inicial)**
+**Implementado:** Novembro 2025
+
+- ✅ **Projeto Mobile** - Estrutura inicial para app de gestores (`2025-11-04`)
+
+---
+
+## � FUNCIONALIDADES PLANEJADAS
+
+### 📈 **Detecção de Anomalias - Shewhart**
+**Status:** Planejado | **Prioridade:** Alta
+
+#### Objetivos
+Implementar controle estatístico de qualidade para detectar surtos epidemiológicos através de anomalias em séries temporais.
+
+#### Componentes
+- [ ] **ShewhartAnalyzer Service**
+  - Cálculo de média móvel e desvio padrão
+  - Limites de controle (LCL, UCL = média ± 3σ)
+  - Regras de Western Electric (1 ponto > 3σ, 2/3 > 2σ, etc.)
+  
+- [ ] **AnalysisResult Entity**
+  - Campos: `MunicipioIBGE`, `Flag`, `AnalysisType`, `AnomalyDetected`, `Severity`, `Details` (JSONB)
+  
+- [ ] **AnomalyDetectionJob**
+  - Job Hangfire para análise recorrente
+  - Iteração sobre municípios e flags
+  - Persistência de resultados
+  
+- [ ] **Endpoints de Anomalias**
+  - `GET /api/analysis/anomalies` (com filtros)
+  - `GET /api/analysis/anomalies/chart/{municipio}/{flag}`
+
+**Critério de Aceitação:** Shewhart detecta anomalia artificial injetada e salva em `AnalysisResult`.
+
+---
+
+### � **Sistema de Alertas**
+**Status:** Planejado | **Prioridade:** Alta
+
+#### Objetivos
+Notificar autoridades quando anomalias forem detectadas através de múltiplos canais.
+
+#### Componentes
+- [ ] **AlertService**
+  - Método `SendAnomalyAlertAsync(AnalysisResult result)`
+  - Classificação de severidade: LOW, MEDIUM, HIGH, CRITICAL
+  - Canais: Log estruturado, Email/Webhook, Push notification
+  
+- [ ] **Alert Entity**
+  - Tabela `alerts` com status de reconhecimento
+  
+- [ ] **AlertsController**
+  - `GET /api/alerts` (paginado)
+  - `GET /api/alerts/unacknowledged`
+  - `PUT /api/alerts/{id}/acknowledge`
+
+**Critério de Aceitação:** Alertas criados automaticamente após detecção de anomalias.
+
+---
+
+### � **Otimizações de Produção**
+**Status:** Contínuo | **Prioridade:** Média
+
+#### Performance
+- [ ] Índices compostos otimizados no PostgreSQL
 - [ ] Cache Redis para agregações frequentes
-- [ ] Paginação em todos os endpoints
+- [ ] Paginação em todos os endpoints de listagem
+- [ ] Query optimization para análises temporais
 
-### 6.2 Observabilidade
-- [ ] Serilog com sink estruturado
-- [ ] Métricas (Prometheus)
-- [ ] Health checks avançados
+#### Observabilidade
+- [ ] Serilog com sinks estruturados (redação de PII)
+- [ ] Métricas customizadas (Prometheus)
+- [ ] Health checks avançados (dependências externas)
 - [ ] Distributed tracing (OpenTelemetry)
 
-### 6.3 Documentação
-- [ ] Swagger/OpenAPI completo
-- [ ] README com setup
-- [ ] ADRs atualizados
-- [ ] Runbook operacional
+#### Documentação
+- [ ] Swagger/OpenAPI completo com exemplos
+- [ ] Runbook operacional para suporte
+- [ ] Guias de troubleshooting
 
 ---
 
-## 📅 Cronograma Estimado
-| Iteração | Duração | Dependências |
-|----------|---------|--------------|
-| 1 - Agregação | 2-3 dias | Nenhuma |
-| 2 - Shewhart | 3-4 dias | Iteração 1 |
-| 3 - CUSUM | 2 dias | Iteração 2 |
-| 4 - Alertas | 2 dias | Iteração 2/3 |
-| 5 - Dashboard | 5-7 dias | Iterações 1-4 |
-| 6 - Produção | Contínuo | Após deploy |
+## � Estatísticas do Projeto
+
+| Métrica | Valor |
+|---------|-------|
+| **Total de Commits** | 50+ commits de features |
+| **Período de Desenvolvimento** | Setembro 2025 - Presente |
+| **ADRs Documentados** | 11 decisões arquiteturais |
+| **Contextos DDD** | 3 (Ingestion, Analysis, Alerts) |
+| **Tecnologias Core** | .NET 8, PostgreSQL, MongoDB, Hangfire |
+| **Cobertura FHIR** | Observation (Hemograma completo) |
 
 ---
 
-## ✅ Critérios de Aceitação Gerais
-- **Iteração 1:** Job diário funciona + endpoint retorna dados
-- **Iteração 2:** Shewhart detecta anomalia + salva resultado
-- **Iteração 3:** CUSUM detecta shift gradual
-- **Iteração 4:** Alertas criados automaticamente
-- **Iteração 5:** Dashboard funcional com dados reais
+## 🎯 Próximas Iterações
+
+### **Q4 2025**
+1. Implementar **Shewhart Analyzer** (3-4 semanas)
+2. Desenvolver **Sistema de Alertas** (2-3 semanas)
+3. Otimizações de performance e observabilidade
+
+### **Q1 2026**
+1. App Mobile - Features de visualização e notificações
+2. Dashboard web para gestores
+3. Integração com sistemas externos de notificação
+
+---
+
+## 📚 Referências
+
+- [Architecture Haiku](architecture-haiku/) - Visão de alto nível
+- [ADRs](architecture-decision-records/) - Decisões arquiteturais
+- [Diagramas](diagrams/) - Visualizações C4
+- [Shewhart Conceitual](shewhart-conceitual.md) - Base teórica para detecção
