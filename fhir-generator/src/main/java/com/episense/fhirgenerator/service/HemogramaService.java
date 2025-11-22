@@ -35,6 +35,7 @@ public class HemogramaService {
                 .id(UUID.randomUUID())
                 .patientId(data.getPatientId())
                 .patientName(data.getPatientName())
+                .city(data.getCity())
                 .collectionDate(data.getCollectionDate().atZone(ZoneId.systemDefault()).toInstant())
                 .fhirBundleJson(fhirJson)
                 .sentToApi(false)
@@ -48,6 +49,7 @@ public class HemogramaService {
                 .rdw(data.getRdw())
                 .whiteBloodCells(data.getWhiteBloodCells())
                 .neutrophils(data.getNeutrophils())
+                .neutrophilsBandForm(data.getNeutrophilsBandForm())
                 .lymphocytes(data.getLymphocytes())
                 .monocytes(data.getMonocytes())
                 .eosinophils(data.getEosinophils())
@@ -65,6 +67,12 @@ public class HemogramaService {
         return java.util.stream.IntStream.range(0, count)
                 .mapToObj(_ -> generateAndSaveHemograma("PATIENT-" + UUID.randomUUID().toString().substring(0, 8)))
                 .toList();
+    }
+
+    public String generateDebugFhir() {
+        HemogramaData data = generateRandomHemogramaData("DEBUG-PATIENT");
+        Bundle bundle = createHemogramaBundle(data);
+        return jsonParser.setPrettyPrint(true).encodeResourceToString(bundle);
     }
 
     public List<Hemograma> findNotSent() {
@@ -88,6 +96,15 @@ public class HemogramaService {
         Bundle bundle = new Bundle();
         bundle.setType(Bundle.BundleType.COLLECTION);
         bundle.setTimestamp(Date.from(data.getCollectionDate().atZone(ZoneId.systemDefault()).toInstant()));
+
+        // Patient Resource
+        Patient patient = new Patient();
+        patient.setId(data.getPatientId());
+        patient.addName().setFamily(data.getPatientName());
+        if (data.getCity() != null) {
+            patient.addAddress().setCity(data.getCity());
+        }
+        bundle.addEntry().setResource(patient);
 
         // Eritrograma
         if (data.getRedBloodCells() != null) {
@@ -122,11 +139,15 @@ public class HemogramaService {
         // Leucograma
         if (data.getWhiteBloodCells() != null) {
             bundle.addEntry().setResource(createObservation(data, "6690-2", "White blood cells",
-                    data.getWhiteBloodCells(), "10*3/uL", "Leukocytes"));
+                    data.getWhiteBloodCells(), "cells/uL", "Leukocytes"));
         }
         if (data.getNeutrophils() != null) {
-            bundle.addEntry().setResource(createObservation(data, "770-8", "Neutrophils",
-                    data.getNeutrophils(), "%", "Neutrophils"));
+            bundle.addEntry().setResource(createObservation(data, "751-8", "Neutrophils",
+                    data.getNeutrophils(), "cells/uL", "Neutrophils"));
+        }
+        if (data.getNeutrophilsBandForm() != null) {
+            bundle.addEntry().setResource(createObservation(data, "764-1", "Neutrophils.band form",
+                    data.getNeutrophilsBandForm(), "cells/uL", "Band Forms"));
         }
         if (data.getLymphocytes() != null) {
             bundle.addEntry().setResource(createObservation(data, "736-9", "Lymphocytes",
@@ -199,9 +220,13 @@ public class HemogramaService {
     }
 
     private HemogramaData generateRandomHemogramaData(String patientId) {
+        String[] cities = {"São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba", "Porto Alegre"};
+        String city = cities[(int) (Math.random() * cities.length)];
+
         return HemogramaData.builder()
                 .patientId(patientId)
                 .patientName("Patient " + patientId)
+                .city(city)
                 .collectionDate(LocalDateTime.now())
                 // Eritrograma - valores normais
                 .redBloodCells(randomInRange(4.5, 5.5))
@@ -211,9 +236,10 @@ public class HemogramaService {
                 .mch(randomInRange(27.0, 32.0))
                 .mchc(randomInRange(32.0, 36.0))
                 .rdw(randomInRange(11.5, 14.5))
-                // Leucograma - valores normais
-                .whiteBloodCells(randomInRange(4.0, 11.0))
-                .neutrophils(randomInRange(40.0, 70.0))
+                // Leucograma - valores normais (Absolute counts)
+                .whiteBloodCells(randomInRange(4000.0, 11000.0))
+                .neutrophils(randomInRange(1800.0, 7700.0))
+                .neutrophilsBandForm(randomInRange(0.0, 700.0)) // Typically low
                 .lymphocytes(randomInRange(20.0, 45.0))
                 .monocytes(randomInRange(2.0, 10.0))
                 .eosinophils(randomInRange(1.0, 6.0))

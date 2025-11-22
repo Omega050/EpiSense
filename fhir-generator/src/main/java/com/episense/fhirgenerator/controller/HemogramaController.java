@@ -60,5 +60,19 @@ public class HemogramaController {
         response.put("service", "FHIR Hemograma Generator");
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/debug/fhir")
+    public ResponseEntity<String> getDebugFhir() {
+        log.info("Generating debug FHIR bundle");
+        try {
+            String fhirJson = hemogramaService.generateDebugFhir();
+            return ResponseEntity.ok()
+                    .header("Content-Type", "application/fhir+json")
+                    .body(fhirJson);
+        } catch (Exception e) {
+            log.error("Error generating debug FHIR", e);
+            return ResponseEntity.status(500).body("Error generating debug FHIR: " + e.getMessage());
+        }
+    }
     
 }

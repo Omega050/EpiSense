@@ -27,6 +27,9 @@ public class Hemograma {
     
     @Column("patient_name")
     private String patientName;
+
+    @Column("city")
+    private String city;
     
     @Column("collection_date")
     private Instant collectionDate;
@@ -74,6 +77,9 @@ public class Hemograma {
     
     @Column("neutrophils")
     private Double neutrophils;
+
+    @Column("neutrophils_band_form")
+    private Double neutrophilsBandForm;
     
     @Column("lymphocytes")
     private Double lymphocytes;
