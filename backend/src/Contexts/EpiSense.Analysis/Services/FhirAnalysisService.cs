@@ -15,6 +15,11 @@ public class FhirAnalysisService
     /// <param name="fhirJson">JSON FHIR da observação ou Bundle contendo observações</param>
     /// <param name="rawDataId">ID do dado bruto no MongoDB (opcional)</param>
     /// <param name="receivedAt">Data de recebimento do dado (opcional)</param>
+    /// <remarks>
+    /// Se for um Bundle, processa TODAS as Observations e consolida os valores laboratoriais
+    /// em um único ObservationSummary. Isso garante detecção correta de flags clínicas que
+    /// requerem múltiplos valores (ex: SIB_SUSPEITA = Leucocitose + Neutrofilia).
+    /// </remarks>
     public ObservationSummary AnalyzeObservation(string fhirJson, string? rawDataId = null, DateTime? receivedAt = null)
     {
         if (string.IsNullOrWhiteSpace(fhirJson))
@@ -34,42 +39,20 @@ public class FhirAnalysisService
             }
 
             var resourceTypeStr = resourceType.GetString();
-            JsonElement? bundleRoot = null;
             
-            // Se for um Bundle, extrai a primeira Observation e guarda referência ao Bundle
+            // Processa Bundle ou Observation única
             if (resourceTypeStr == "Bundle")
             {
-                bundleRoot = fhirRoot;
-                fhirRoot = ExtractObservationFromBundle(fhirRoot);
+                return AnalyzeBundle(fhirRoot, rawDataId, receivedAt);
             }
-            else if (resourceTypeStr != "Observation")
+            else if (resourceTypeStr == "Observation")
             {
-                throw new ArgumentException($"Dados FHIR não são do tipo Observation ou Bundle. Tipo recebido: {resourceTypeStr}");
-            }
-
-            var summary = new ObservationSummary
-            {
-                ObservationId = GetObservationId(fhirRoot),
-                DataColeta = GetEffectiveDateTime(fhirRoot) ?? receivedAt ?? DateTime.UtcNow
-            };
-
-            // Extrair valores laboratoriais dos componentes
-            ExtractLabValues(fhirRoot, summary);
-            
-            // Aplicar regras clínicas para gerar flags
-            ApplyClinicalRules(summary);
-            
-            // Extrair código do município do Patient (se Bundle estiver disponível)
-            if (bundleRoot.HasValue)
-            {
-                ExtractMunicipalityCodeFromBundle(bundleRoot.Value, summary);
+                return AnalyzeSingleObservation(fhirRoot, rawDataId, receivedAt);
             }
             else
             {
-                ExtractMunicipalityCode(fhirRoot, summary);
+                throw new ArgumentException($"Dados FHIR não são do tipo Observation ou Bundle. Tipo recebido: {resourceTypeStr}");
             }
-
-            return summary;
         }
         catch (JsonException ex)
         {
@@ -78,9 +61,10 @@ public class FhirAnalysisService
     }
 
     /// <summary>
-    /// Extrai a primeira Observation de um Bundle FHIR
+    /// Processa um Bundle FHIR consolidando TODAS as Observations em um único ObservationSummary.
+    /// Isso resolve o problema de perda de dados (93-95%) ao processar apenas a primeira observation.
     /// </summary>
-    private JsonElement ExtractObservationFromBundle(JsonElement bundleRoot)
+    private ObservationSummary AnalyzeBundle(JsonElement bundleRoot, string? rawDataId, DateTime? receivedAt)
     {
         if (!bundleRoot.TryGetProperty("entry", out var entries) ||
             entries.ValueKind != JsonValueKind.Array)
@@ -88,17 +72,114 @@ public class FhirAnalysisService
             throw new ArgumentException("Bundle FHIR não contém array 'entry'");
         }
 
+        var summary = new ObservationSummary
+        {
+            ObservationId = GetBundleId(bundleRoot),
+            DataColeta = GetBundleTimestamp(bundleRoot) ?? receivedAt ?? DateTime.UtcNow
+        };
+
+        int observationCount = 0;
+        DateTime? firstObservationDate = null;
+
+        // Processa TODAS as Observations do Bundle
         foreach (var entry in entries.EnumerateArray())
         {
-            if (entry.TryGetProperty("resource", out var resource) &&
-                resource.TryGetProperty("resourceType", out var resourceType) &&
-                resourceType.GetString() == "Observation")
+            if (!entry.TryGetProperty("resource", out var resource))
+                continue;
+
+            if (!resource.TryGetProperty("resourceType", out var resourceType))
+                continue;
+
+            var resourceTypeStr = resourceType.GetString();
+
+            // Processa Observations
+            if (resourceTypeStr == "Observation")
             {
-                return resource;
+                observationCount++;
+                
+                // Extrai valores laboratoriais (acumula no summary)
+                ExtractLabValues(resource, summary);
+                
+                // Captura a data da primeira observation se disponível
+                if (!firstObservationDate.HasValue)
+                {
+                    firstObservationDate = GetEffectiveDateTime(resource);
+                }
+            }
+            // Extrai município do Patient
+            else if (resourceTypeStr == "Patient")
+            {
+                ExtractMunicipalityCodeFromPatient(resource, summary);
             }
         }
 
-        throw new ArgumentException("Bundle FHIR não contém nenhum recurso do tipo Observation");
+        if (observationCount == 0)
+        {
+            throw new ArgumentException("Bundle FHIR não contém nenhum recurso do tipo Observation");
+        }
+
+        // Usa data da primeira observation se disponível, senão usa timestamp do bundle
+        if (firstObservationDate.HasValue)
+        {
+            summary.DataColeta = firstObservationDate.Value;
+        }
+
+        // Aplicar regras clínicas com TODOS os valores laboratoriais consolidados
+        ApplyClinicalRules(summary);
+
+        return summary;
+    }
+
+    /// <summary>
+    /// Processa uma única Observation FHIR
+    /// </summary>
+    private ObservationSummary AnalyzeSingleObservation(JsonElement observationRoot, string? rawDataId, DateTime? receivedAt)
+    {
+        var summary = new ObservationSummary
+        {
+            ObservationId = GetObservationId(observationRoot),
+            DataColeta = GetEffectiveDateTime(observationRoot) ?? receivedAt ?? DateTime.UtcNow
+        };
+
+        // Extrair valores laboratoriais
+        ExtractLabValues(observationRoot, summary);
+        
+        // Aplicar regras clínicas
+        ApplyClinicalRules(summary);
+        
+        // Tentar extrair município (limitado sem Bundle)
+        ExtractMunicipalityCode(observationRoot, summary);
+
+        return summary;
+    }
+
+    /// <summary>
+    /// Obtém o ID do Bundle FHIR
+    /// </summary>
+    private string GetBundleId(JsonElement bundleRoot)
+    {
+        if (bundleRoot.TryGetProperty("id", out var idElement))
+        {
+            return $"Bundle/{idElement.GetString()}";
+        }
+        return $"Bundle/{Guid.NewGuid()}";
+    }
+
+    /// <summary>
+    /// Obtém o timestamp do Bundle FHIR
+    /// </summary>
+    private DateTime? GetBundleTimestamp(JsonElement bundleRoot)
+    {
+        if (bundleRoot.TryGetProperty("timestamp", out var timestampElement))
+        {
+            if (DateTime.TryParse(timestampElement.GetString(), out var timestamp))
+            {
+                return timestamp.Kind == DateTimeKind.Utc 
+                    ? timestamp 
+                    : timestamp.ToUniversalTime();
+            }
+        }
+        return null;
     }
 
     /// <summary>
@@ -132,48 +213,59 @@ public class FhirAnalysisService
     }
 
     /// <summary>
-    /// Extrai valores laboratoriais dos componentes FHIR
+    /// Extrai valores laboratoriais de uma Observation FHIR.
+    /// Processa tanto 'valueQuantity' (valor principal) quanto 'component' (valores múltiplos).
     /// </summary>
     private void ExtractLabValues(JsonElement fhirRoot, ObservationSummary summary)
     {
-        if (!fhirRoot.TryGetProperty("component", out var componentsElement) || 
-            componentsElement.ValueKind != JsonValueKind.Array)
-            return;
-
-        foreach (var component in componentsElement.EnumerateArray())
-        {
-            var code = ExtractComponentCode(component);
-            var value = ExtractComponentValue(component);
-
-            if (string.IsNullOrEmpty(code) || !value.HasValue)
-                continue;
-
-            switch (code)
-            {
-                case LoincCodes.LEUCOCITOS:
-                    summary.LabValues["leucocitos"] = value.Value;
-                    break;
-                case LoincCodes.NEUTROFILOS:
-                case LoincCodes.NEUTROFILOS_ALT:  // Aceita código alternativo
-                    summary.LabValues["neutrofilos"] = value.Value;
-                    break;
-                case LoincCodes.BASTONETES:
-                case LoincCodes.BASTONETES_ALT:  // Aceita código alternativo 711-2
-                    summary.LabValues["bastonetes"] = value.Value;
-                    break;
-                case LoincCodes.BASTONETES_PCT:
-                    summary.LabValues["bastonetes_pct"] = value.Value;
-                    break;
-            }
-        }
-
-        // Também verifica se há um valor principal na observação
+        // Primeiro, extrai valor principal da Observation (valueQuantity)
         var mainValue = ExtractMainValue(fhirRoot);
         var mainCode = ExtractMainCode(fhirRoot);
         
         if (mainValue.HasValue && !string.IsNullOrEmpty(mainCode))
         {
-            summary.LabValues[mainCode] = mainValue.Value;
+            MapLoincCodeToLabValue(mainCode, mainValue.Value, summary);
+        }
+
+        // Depois, processa componentes (se houver)
+        if (fhirRoot.TryGetProperty("component", out var componentsElement) && 
+            componentsElement.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var component in componentsElement.EnumerateArray())
+            {
+                var code = ExtractComponentCode(component);
+                var value = ExtractComponentValue(component);
+
+                if (string.IsNullOrEmpty(code) || !value.HasValue)
+                    continue;
+
+                MapLoincCodeToLabValue(code, value.Value, summary);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Mapeia código LOINC para chave no LabValues do summary.
+    /// Centraliza a lógica de mapeamento para evitar duplicação.
+    /// </summary>
+    private void MapLoincCodeToLabValue(string loincCode, decimal value, ObservationSummary summary)
+    {
+        switch (loincCode)
+        {
+            case LoincCodes.LEUCOCITOS:
+                summary.LabValues["leucocitos"] = value;
+                break;
+            case LoincCodes.NEUTROFILOS:
+            case LoincCodes.NEUTROFILOS_ALT:
+                summary.LabValues["neutrofilos"] = value;
+                break;
+            case LoincCodes.BASTONETES:
+            case LoincCodes.BASTONETES_ALT:
+                summary.LabValues["bastonetes"] = value;
+                break;
+            case LoincCodes.BASTONETES_PCT:
+                summary.LabValues["bastonetes_pct"] = value;
+                break;
         }
     }
 
@@ -198,7 +290,7 @@ public class FhirAnalysisService
     }
 
     /// <summary>
-    /// Extrai o valor numérico de um componente FHIR
+    /// Extrai o valor numérico de um componente FHIR e normaliza unidades.
     /// </summary>
     private decimal? ExtractComponentValue(JsonElement component)
     {
@@ -206,28 +298,59 @@ public class FhirAnalysisService
             valueElement.TryGetProperty("value", out var valueNumber) &&
             valueNumber.ValueKind == JsonValueKind.Number)
         {
-            var value = valueNumber.GetDecimal();
-            
-            // Verifica a unidade para fazer conversão se necessário
-            if (valueElement.TryGetProperty("code", out var unitCode))
-            {
-                var unit = unitCode.GetString();
-                
-                // Se a unidade for 10*3/uL ou x10*3/uL, multiplica por 1000
-                // para converter para células/μL
-                if (unit == "10*3/uL" || unit == "x10*3/uL")
-                {
-                    value *= 1000m;
-                }
-            }
-            
-            return value;
+            return NormalizeValueWithUnit(valueNumber.GetDecimal(), valueElement);
         }
         return null;
     }
 
     /// <summary>
-    /// Extrai o valor principal da observação FHIR
+    /// Normaliza valores laboratoriais baseado na unidade de medida.
+    /// Converte todas as contagens celulares para células/μL (unidade padrão).
+    /// </summary>
+    private decimal NormalizeValueWithUnit(decimal value, JsonElement valueElement)
+    {
+        // Verifica a unidade para fazer conversão se necessário
+        if (valueElement.TryGetProperty("code", out var unitCode))
+        {
+            var unit = unitCode.GetString();
+            
+            // Conversões de unidades para células/μL (padrão)
+            switch (unit)
+            {
+                case "10*3/uL":
+                case "x10*3/uL":
+                case "10^3/uL":
+                    // 10³/μL → células/μL: multiplica por 1000
+                    return value * 1000m;
+                    
+                case "10*6/uL":
+                case "x10*6/uL":
+                case "10^6/uL":
+                    // 10⁶/μL → células/μL: multiplica por 1.000.000
+                    return value * 1000000m;
+                    
+                case "cells/uL":
+                case "/uL":
+                case "cells/μL":
+                case "/μL":
+                    // Já está em células/μL, sem conversão
+                    return value;
+                    
+                case "%":
+                    // Percentual - mantém como está (será tratado separadamente)
+                    return value;
+                    
+                default:
+                    // Unidade desconhecida - assume que já está normalizada
+                    return value;
+            }
+        }
+        
+        return value;
+    }
+
+    /// <summary>
+    /// Extrai o valor principal da observação FHIR com normalização de unidades
     /// </summary>
     private decimal? ExtractMainValue(JsonElement fhirRoot)
     {
@@ -235,7 +358,7 @@ public class FhirAnalysisService
             valueElement.TryGetProperty("value", out var valueNumber) &&
             valueNumber.ValueKind == JsonValueKind.Number)
         {
-            return valueNumber.GetDecimal();
+            return NormalizeValueWithUnit(valueNumber.GetDecimal(), valueElement);
         }
         return null;
     }
@@ -356,56 +479,39 @@ public class FhirAnalysisService
     }
     
     /// <summary>
-    /// Extrai o código do município IBGE do recurso Patient no Bundle
+    /// Extrai o código do município IBGE do recurso Patient
     /// Mapeia cidade brasileira para código IBGE de 7 dígitos
     /// </summary>
-    private void ExtractMunicipalityCodeFromBundle(JsonElement bundleRoot, ObservationSummary summary)
+    private void ExtractMunicipalityCodeFromPatient(JsonElement patientResource, ObservationSummary summary)
     {
-        if (!bundleRoot.TryGetProperty("entry", out var entries) ||
-            entries.ValueKind != JsonValueKind.Array)
+        // Extrai endereço do paciente
+        if (!patientResource.TryGetProperty("address", out var addresses) ||
+            addresses.ValueKind != JsonValueKind.Array)
         {
             return;
         }
 
-        // Procura o recurso Patient no Bundle
-        foreach (var entry in entries.EnumerateArray())
+        foreach (var address in addresses.EnumerateArray())
         {
-            if (!entry.TryGetProperty("resource", out var resource) ||
-                !resource.TryGetProperty("resourceType", out var resourceType) ||
-                resourceType.GetString() != "Patient")
+            // Obtém cidade e estado
+            string? city = null;
+            string? state = null;
+
+            if (address.TryGetProperty("city", out var cityElement))
             {
-                continue;
+                city = cityElement.GetString();
             }
 
-            // Extrai endereço do paciente
-            if (!resource.TryGetProperty("address", out var addresses) ||
-                addresses.ValueKind != JsonValueKind.Array)
+            if (address.TryGetProperty("state", out var stateElement))
             {
-                continue;
+                state = stateElement.GetString();
             }
 
-            foreach (var address in addresses.EnumerateArray())
+            // Se encontrou cidade e estado, mapeia para código IBGE
+            if (!string.IsNullOrEmpty(city) && !string.IsNullOrEmpty(state))
             {
-                // Obtém cidade e estado
-                string? city = null;
-                string? state = null;
-
-                if (address.TryGetProperty("city", out var cityElement))
-                {
-                    city = cityElement.GetString();
-                }
-
-                if (address.TryGetProperty("state", out var stateElement))
-                {
-                    state = stateElement.GetString();
-                }
-
-                // Se encontrou cidade e estado, mapeia para código IBGE
-                if (!string.IsNullOrEmpty(city) && !string.IsNullOrEmpty(state))
-                {
-                    summary.CodigoMunicipioIBGE = MapCityToIBGECode(city, state);
-                    return;
-                }
+                summary.CodigoMunicipioIBGE = MapCityToIBGECode(city, state);
+                return;
             }
         }
     }
