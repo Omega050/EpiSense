@@ -71,6 +71,7 @@ public class ShewhartAnalysisJob
                 .Select(obs => obs.CodigoMunicipioIBGE)
                 .Where(ibge => !string.IsNullOrWhiteSpace(ibge))
                 .Distinct()
+                .Cast<string>() // Remove nullable após Where
                 .ToList();
 
             _logger.LogInformation(
@@ -97,7 +98,7 @@ public class ShewhartAnalysisJob
                         totalAnalyses++;
 
                         // Se anomalia detectada, registra log detalhado
-                        if (result.AnomalyDetected)
+                        if (result.AnomalyDetected && result.Baseline != null)
                         {
                             totalAnomalies++;
                             

@@ -67,7 +67,7 @@ public class AnomalyController : ControllerBase
     /// <response code="202">Job iniciado com sucesso</response>
     [HttpPost("trigger-analysis")]
     [ProducesResponseType(StatusCodes.Status202Accepted)]
-    public async Task<IActionResult> TriggerAnalysis()
+    public IActionResult TriggerAnalysis()
     {
         _logger.LogInformation("Execução manual do job Shewhart solicitada via API");
         
