@@ -62,6 +62,8 @@ COPY --from=builder /usr/src/fhir-server/target/release/fhir-server /app/fhir-se
 # Copiar script de entrypoint
 COPY entrypoint.sh /app/entrypoint.sh
 
+RUN sed -i 's/\r$//' /app/entrypoint.sh
+
 # Garantir que o binário e o script sejam executáveis
 RUN chmod +x /app/fhir-server /app/entrypoint.sh
 
