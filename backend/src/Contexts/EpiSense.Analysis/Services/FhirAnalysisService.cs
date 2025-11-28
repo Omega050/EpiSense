@@ -74,8 +74,7 @@ public class FhirAnalysisService
 
         var summary = new ObservationSummary
         {
-            ObservationId = GetBundleId(bundleRoot),
-            DataColeta = GetBundleTimestamp(bundleRoot) ?? receivedAt ?? DateTime.UtcNow
+            ObservationId = GetBundleId(bundleRoot)
         };
 
         int observationCount = 0;
@@ -118,11 +117,11 @@ public class FhirAnalysisService
             throw new ArgumentException("Bundle FHIR não contém nenhum recurso do tipo Observation");
         }
 
-        // Usa data da primeira observation se disponível, senão usa timestamp do bundle
-        if (firstObservationDate.HasValue)
-        {
-            summary.DataColeta = firstObservationDate.Value;
-        }
+        // PRIORIDADE: 1º effectiveDateTime da observation, 2º timestamp do bundle, 3º receivedAt, 4º UtcNow
+        summary.DataColeta = firstObservationDate 
+            ?? GetBundleTimestamp(bundleRoot) 
+            ?? receivedAt 
+            ?? DateTime.UtcNow;
 
         // Aplicar regras clínicas com TODOS os valores laboratoriais consolidados
         ApplyClinicalRules(summary);
