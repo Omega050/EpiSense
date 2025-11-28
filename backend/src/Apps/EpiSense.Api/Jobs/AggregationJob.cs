@@ -22,18 +22,26 @@ public class AggregationJob
     {
         try
         {
-            _logger.LogInformation("Iniciando agregação diária...");
+            _logger.LogInformation("📊 Iniciando agregação diária...");
             
             // 3️⃣ CHAMA O SERVICE: Delega a lógica
-            var yesterday = DateTime.UtcNow.Date.AddDays(-1);
-            await _aggregationService.UpdateDailyAggregationsAsync(yesterday);
+            // IMPORTANTE: Agrega D-2 (não D-1) para evitar conflito com janela Shewhart
+            // - D-0, D-1: Dados frescos (análise individual em tempo real)
+            // - D-2 em diante: Agregados para baseline estatístico Shewhart
+            var targetDate = DateTime.UtcNow.Date.AddDays(-2);
             
-            _logger.LogInformation("Agregação diária concluída com sucesso");
+            _logger.LogInformation(
+                "📅 Agregando data: {TargetDate:yyyy-MM-dd} (D-2 para estabilidade de baseline)",
+                targetDate);
+            
+            await _aggregationService.UpdateDailyAggregationsAsync(targetDate);
+            
+            _logger.LogInformation("✅ Agregação diária concluída com sucesso");
         }
         catch (Exception ex)
         {
             // 4️⃣ TRATAMENTO DE ERRO: Log e re-throw
-            _logger.LogError(ex, "Erro ao executar agregação diária");
+            _logger.LogError(ex, "❌ Erro ao executar agregação diária");
             throw; // Hangfire marca como falha
         }
     }
