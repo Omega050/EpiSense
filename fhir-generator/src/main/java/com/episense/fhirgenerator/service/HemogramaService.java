@@ -25,9 +25,13 @@ public class HemogramaService {
     private final IParser jsonParser;
 
     public Hemograma generateAndSaveHemograma(String patientId) {
-        log.info("Generating random hemograma for patient: {}", patientId);
+        return generateAndSaveHemograma(patientId, null, false, LocalDateTime.now());
+    }
 
-        HemogramaData data = generateRandomHemogramaData(patientId);
+    public Hemograma generateAndSaveHemograma(String patientId, String city, boolean isSick, LocalDateTime date) {
+        // log.info("Generating hemograma for patient: {} (Sick: {})", patientId, isSick);
+
+        HemogramaData data = generateRandomHemogramaData(patientId, city, isSick, date);
         Bundle bundle = createHemogramaBundle(data);
         String fhirJson = jsonParser.encodeResourceToString(bundle);
 
@@ -62,15 +66,60 @@ public class HemogramaService {
     }
 
     public List<Hemograma> generateBatch(int count) {
-        log.info("Generating batch of {} hemogramas", count);
+        return generateBatch(count, "Sao Paulo|SP", 0.0); // Default to normal batch
+    }
+
+    public List<Hemograma> generateBatch(int count, String city, double anomalyRate) {
+        return generateBatch(count, city, anomalyRate, LocalDateTime.now());
+    }
+
+    public List<Hemograma> generateBatch(int count, String city, double anomalyRate, LocalDateTime date) {
+        log.info("Generating batch of {} hemogramas for {} (Anomaly Rate: {})", count, city, anomalyRate);
 
         return java.util.stream.IntStream.range(0, count)
-                .mapToObj(_ -> generateAndSaveHemograma("PATIENT-" + UUID.randomUUID().toString().substring(0, 8)))
+                .mapToObj(_ -> {
+                    boolean isSick = Math.random() < anomalyRate;
+                    return generateAndSaveHemograma("PATIENT-" + UUID.randomUUID().toString().substring(0, 8), 
+                            city, isSick, date);
+                })
                 .toList();
     }
 
+    public void generateHistoricalData(String city, int days, int dailyCount) {
+        generateHistoricalData(city, days, dailyCount, 0.01);
+    }
+
+    public void generateHistoricalData(String city, int days, int dailyCount, double anomalyRate) {
+        log.info("Generating historical data for {} over {} days ({} per day) with anomaly rate {}", city, days, dailyCount, anomalyRate);
+        
+        LocalDateTime endDate = LocalDateTime.now().minusDays(1); // Until yesterday
+        LocalDateTime startDate = endDate.minusDays(days);
+
+        for (int i = 0; i < days; i++) {
+            LocalDateTime currentDate = startDate.plusDays(i);
+            // log.info("Generating data for date: {}", currentDate.toLocalDate());
+            
+            java.util.stream.IntStream.range(0, dailyCount).forEach(_ -> {
+                // Use configurable anomaly rate
+                boolean isSick = Math.random() < anomalyRate; 
+                generateAndSaveHemograma("HIST-" + UUID.randomUUID().toString().substring(0, 8), 
+                        city, isSick, currentDate);
+            });
+        }
+        log.info("Historical data generation completed.");
+    }
+
+    public List<Hemograma> generateOutbreak(String city, int count, double anomalyRate) {
+        return generateOutbreak(city, count, anomalyRate, LocalDateTime.now());
+    }
+
+    public List<Hemograma> generateOutbreak(String city, int count, double anomalyRate, LocalDateTime date) {
+        log.info("Generating OUTBREAK batch for {} with {} items and {} anomaly rate at {}", city, count, anomalyRate, date);
+        return generateBatch(count, city, anomalyRate, date);
+    }
+
     public String generateDebugFhir() {
-        HemogramaData data = generateRandomHemogramaData("DEBUG-PATIENT");
+        HemogramaData data = generateRandomHemogramaData("DEBUG-PATIENT", "Sao Paulo|SP", true, LocalDateTime.now());
         Bundle bundle = createHemogramaBundle(data);
         return jsonParser.setPrettyPrint(true).encodeResourceToString(bundle);
     }
@@ -103,6 +152,9 @@ public class HemogramaService {
         patient.addName().setFamily(data.getPatientName());
         if (data.getCity() != null) {
             patient.addAddress().setCity(data.getCity());
+        }
+        if (data.getState() != null) {
+            patient.addAddress().setState(data.getState());
         }
         bundle.addEntry().setResource(patient);
 
@@ -219,15 +271,28 @@ public class HemogramaService {
         return observation;
     }
 
-    private HemogramaData generateRandomHemogramaData(String patientId) {
-        String[] cities = {"São Paulo", "Rio de Janeiro", "Belo Horizonte", "Curitiba", "Porto Alegre"};
-        String city = cities[(int) (Math.random() * cities.length)];
+    private HemogramaData generateRandomHemogramaData(String patientId, String cityInput, boolean isSick, LocalDateTime date) {
+        String city = cityInput;
+        String state = null;
+
+        if (city == null) {
+            String[] cities = {"Sao Paulo|SP", "Rio de Janeiro|RJ", "Belo Horizonte|MG", "Curitiba|PR", "Porto Alegre|RS"};
+            String selection = cities[(int) (Math.random() * cities.length)];
+            String[] parts = selection.split("\\|");
+            city = parts[0];
+            state = parts[1];
+        } else if (city.contains("|")) {
+            String[] parts = city.split("\\|");
+            city = parts[0];
+            state = parts[1];
+        }
 
         return HemogramaData.builder()
                 .patientId(patientId)
                 .patientName("Patient " + patientId)
                 .city(city)
-                .collectionDate(LocalDateTime.now())
+                .state(state)
+                .collectionDate(date)
                 // Eritrograma - valores normais
                 .redBloodCells(randomInRange(4.5, 5.5))
                 .hemoglobin(randomInRange(13.0, 17.0))
@@ -237,9 +302,10 @@ public class HemogramaService {
                 .mchc(randomInRange(32.0, 36.0))
                 .rdw(randomInRange(11.5, 14.5))
                 // Leucograma - valores normais (Absolute counts)
-                .whiteBloodCells(randomInRange(4000.0, 11000.0))
-                .neutrophils(randomInRange(1800.0, 7700.0))
-                .neutrophilsBandForm(randomInRange(0.0, 700.0)) // Typically low
+                // Leucograma
+                .whiteBloodCells(isSick ? randomInRange(12000.0, 25000.0) : randomInRange(4000.0, 11000.0)) // Leucocitose if sick
+                .neutrophils(isSick ? randomInRange(8000.0, 20000.0) : randomInRange(1800.0, 7700.0)) // Neutrofilia if sick
+                .neutrophilsBandForm(isSick ? randomInRange(600.0, 1500.0) : randomInRange(0.0, 500.0)) // Desvio a esquerda if sick
                 .lymphocytes(randomInRange(20.0, 45.0))
                 .monocytes(randomInRange(2.0, 10.0))
                 .eosinophils(randomInRange(1.0, 6.0))
