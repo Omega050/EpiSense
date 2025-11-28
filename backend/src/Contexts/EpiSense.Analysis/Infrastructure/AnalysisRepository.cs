@@ -94,4 +94,19 @@ public class AnalysisRepository : IAnalysisRepository
 
         return summaries.Count(s => s.Flags.Any(f => flags.Contains(f)));
     }
+
+    public async Task<IEnumerable<DailyCaseAggregation>> GetDailyAggregationsAsync(
+        string municipioIbge, 
+        string flag, 
+        DateTime startDate, 
+        DateTime endDate)
+    {
+        return await _context.DailyCaseAggregations
+            .Where(agg => agg.MunicipioIBGE == municipioIbge
+                       && agg.Flag == flag
+                       && agg.Data >= startDate
+                       && agg.Data <= endDate)
+            .OrderBy(agg => agg.Data)
+            .ToListAsync();
+    }
 }

@@ -5,15 +5,23 @@ using Microsoft.Extensions.Logging;
 
 namespace EpiSense.Analysis.Services;
 
+/// <summary>
+/// Analisador de anomalias epidemiológicas usando algoritmo de Shewhart (Controle Estatístico de Processos).
+/// 
+/// DECISÃO ARQUITETURAL (ADR-011):
+/// - Usa dados agregados (DailyCaseAggregation) que já aplicam peso 2 para SIB_GRAVE
+/// - SIB_GRAVE conta como 2 casos, SIB_SUSPEITA como 1 caso
+/// - Todas as flags são normalizadas para SIB_SUSPEITA na agregação
+/// </summary>
 public class ShewhartAnalyzer
 {
     private readonly IAnalysisRepository _repository;
     private readonly ILogger<ShewhartAnalyzer> _logger;
     
     // Configurações padrão do algoritmo
-    private const int _defaultBaselineDays = 60; // 2 meses de histórico recomendado
+    private const int _defaultBaselineDays = 15; // 15 dias de histórico recomendado
     private const double _controlLimitSigma = 3.0; // Regra dos 3 Sigma (99.7% confiança)
-    private const int _minimumCasesForAnalysis = 90; // Mínimo de casos no período baseline
+    private const int _minimumCasesForAnalysis = 10; // Mínimo de casos no período baseline
 
     public ShewhartAnalyzer(
         IAnalysisRepository repository,
@@ -25,11 +33,14 @@ public class ShewhartAnalyzer
 
     /// <summary>
     /// Executa análise de Shewhart para um município e flag clínica específicos.
+    /// 
+    /// IMPORTANTE (ADR-011): Todas as flags relacionadas a SIB são normalizadas para SIB_SUSPEITA
+    /// nas agregações diárias. Isso inclui: SIB_SUSPEITA, SIB_GRAVE, DESVIO_ESQUERDA, etc.
     /// </summary>
     /// <param name="municipioIbge">Código IBGE do município (7 dígitos)</param>
-    /// <param name="flag">Flag clínica a analisar (ex: "SIB_SUSPEITA", "DENGUE")</param>
+    /// <param name="flag">Flag clínica a analisar (ex: "SIB_SUSPEITA", "DESVIO_ESQUERDA")</param>
     /// <param name="targetDate">Data-alvo para análise (padrão: data atual)</param>
-    /// <param name="baselineDays">Dias de histórico para calcular baseline (padrão: 60)</param>
+    /// <param name="baselineDays">Dias de histórico para calcular baseline (padrão: 15)</param>
     /// <returns>Resultado da análise com detecção de anomalia</returns>
     public async Task<ShewhartResult> AnalyzeAsync(
         string municipioIbge,
@@ -50,17 +61,20 @@ public class ShewhartAnalyzer
         if (string.IsNullOrWhiteSpace(flag))
             throw new ArgumentException("Flag clínica é obrigatória", nameof(flag));
         
-        if (baselineDays < 30)
-            throw new ArgumentException("Período de baseline deve ser >= 30 dias", nameof(baselineDays));
+        // Normaliza flag para busca nas agregações (ADR-011)
+        var normalizedFlag = NormalizeFlagForAggregation(flag);
+        
+        if (baselineDays < 7)
+            throw new ArgumentException("Período de baseline deve ser >= 7 dias", nameof(baselineDays));
 
         // 1. Calcula período de baseline (exclui o dia-alvo)
         var baselineStart = targetDate.Value.AddDays(-baselineDays);
         var baselineEnd = targetDate.Value.AddDays(-1); // Dia anterior ao alvo
 
-        // 2. Busca dados históricos do período de baseline
+        // 2. Busca dados históricos do período de baseline (usando flag normalizada)
         var baselineData = await GetDailyCasesAsync(
             municipioIbge, 
-            flag, 
+            normalizedFlag, 
             baselineStart, 
             baselineEnd);
 
@@ -75,7 +89,7 @@ public class ShewhartAnalyzer
             return new ShewhartResult
             {
                 MunicipioIbge = municipioIbge,
-                Flag = flag,
+                Flag = flag,  // Retorna flag original para o usuário
                 TargetDate = targetDate.Value,
                 AnomalyDetected = false,
                 InsufficientData = true,
@@ -90,8 +104,8 @@ public class ShewhartAnalyzer
             "Baseline calculado: μ={Mean:F2}, σ={StdDev:F2}, UCL={UCL:F2}, LCL={LCL:F2}",
             baseline.Mean, baseline.StdDev, baseline.UCL, baseline.LCL);
 
-        // 5. Busca contagem de casos do dia-alvo
-        var targetCases = await GetDailyCasesAsync(municipioIbge, flag, targetDate.Value, targetDate.Value);
+        // 5. Busca contagem de casos do dia-alvo (usando flag normalizada)
+        var targetCases = await GetDailyCasesAsync(municipioIbge, normalizedFlag, targetDate.Value, targetDate.Value);
         var observedValue = targetCases.FirstOrDefault()?.CaseCount ?? 0;
 
         // 6. Detecta anomalia
@@ -101,7 +115,7 @@ public class ShewhartAnalyzer
         var result = new ShewhartResult
         {
             MunicipioIbge = municipioIbge,
-            Flag = flag,
+            Flag = flag,  // Retorna flag original para o usuário
             TargetDate = targetDate.Value,
             ObservedValue = observedValue,
             Baseline = baseline,
@@ -134,7 +148,7 @@ public class ShewhartAnalyzer
 
     /// <summary>
     /// Busca contagem diária de casos para um município, flag e período específicos.
-    /// Agrupa por data para obter série temporal de casos/dia.
+    /// Usa os dados agregados (DailyCaseAggregation) que já aplicam peso 2 para SIB_GRAVE.
     /// </summary>
     private async Task<List<DailyCaseCount>> GetDailyCasesAsync(
         string municipioIbge,
@@ -142,20 +156,19 @@ public class ShewhartAnalyzer
         DateTime startDate,
         DateTime endDate)
     {
-        // Busca todas as observações do período
-        var observations = await _repository.GetByMunicipioAsync(
+        // Busca agregações diárias do período (dados já consolidados com peso correto)
+        var aggregations = await _repository.GetDailyAggregationsAsync(
             municipioIbge,
+            flag,
             startDate,
             endDate);
 
-        // Filtra por flag e agrupa por data
-        var dailyCounts = observations
-            .Where(obs => obs.Flags.Contains(flag))
-            .GroupBy(obs => obs.DataColeta.Date)
-            .Select(g => new DailyCaseCount
+        // Converte agregações para contagem diária
+        var dailyCounts = aggregations
+            .Select(agg => new DailyCaseCount
             {
-                Date = g.Key,
-                CaseCount = g.Count()
+                Date = agg.Data,
+                CaseCount = agg.TotalCasos
             })
             .OrderBy(d => d.Date)
             .ToList();
@@ -273,5 +286,36 @@ public class ShewhartAnalyzer
                $"Desvio: {deviationInSigmas:F1}σ. " +
                $"Limites de controle: [{baseline.LCL:F1}, {baseline.UCL:F1}]. " +
                $"{interpretation}.";
+    }
+
+    /// <summary>
+    /// Normaliza flags clínicas para busca nas agregações diárias.
+    /// 
+    /// Conforme ADR-011, todas as flags relacionadas a SIB são agregadas como SIB_SUSPEITA:
+    /// - SIB_SUSPEITA → SIB_SUSPEITA
+    /// - SIB_GRAVE → SIB_SUSPEITA (com peso 2)
+    /// - DESVIO_ESQUERDA → SIB_SUSPEITA
+    /// - LAB_* → SIB_SUSPEITA (se relacionado a SIB)
+    /// </summary>
+    private string NormalizeFlagForAggregation(string flag)
+    {
+        // Flags relacionadas a SIB são todas agregadas como SIB_SUSPEITA
+        var sibRelatedFlags = new[]
+        {
+            "SIB_SUSPEITA",
+            "SIB_GRAVE",
+            "DESVIO_ESQUERDA",
+            "LAB_LEUCOCITOSE",
+            "LAB_NEUTROFILIA",
+            "LAB_DESVIO_ESQUERDA"
+        };
+
+        if (sibRelatedFlags.Contains(flag, StringComparer.OrdinalIgnoreCase))
+        {
+            return ClinicalFlags.Clinical.SIB_SUSPEITA;
+        }
+
+        // Outras flags (DENGUE, COVID, etc.) mantêm o nome original
+        return flag;
     }
 }

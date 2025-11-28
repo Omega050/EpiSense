@@ -11,14 +11,14 @@ namespace EpiSense.Api.Controllers;
 [Route("api/[controller]")]
 public class AnomalyController : ControllerBase
 {
-    private readonly ShewhartAnalysisJob _shewhartJob;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AnomalyController> _logger;
 
     public AnomalyController(
-        ShewhartAnalysisJob shewhartJob,
+        IServiceScopeFactory scopeFactory,
         ILogger<AnomalyController> logger)
     {
-        _shewhartJob = shewhartJob;
+        _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
@@ -46,7 +46,9 @@ public class AnomalyController : ControllerBase
             if (string.IsNullOrWhiteSpace(flag))
                 return BadRequest("Flag clínica é obrigatória");
 
-            var result = await _shewhartJob.ExecuteForMunicipioAsync(municipioIbge, flag);
+            using var scope = _scopeFactory.CreateScope();
+            var shewhartJob = scope.ServiceProvider.GetRequiredService<ShewhartAnalysisJob>();
+            var result = await shewhartJob.ExecuteForMunicipioAsync(municipioIbge, flag);
             return Ok(result);
         }
         catch (Exception ex)
@@ -76,7 +78,9 @@ public class AnomalyController : ControllerBase
         {
             try
             {
-                await _shewhartJob.ExecuteAsync();
+                using var scope = _scopeFactory.CreateScope();
+                var shewhartJob = scope.ServiceProvider.GetRequiredService<ShewhartAnalysisJob>();
+                await shewhartJob.ExecuteAsync();
             }
             catch (Exception ex)
             {
