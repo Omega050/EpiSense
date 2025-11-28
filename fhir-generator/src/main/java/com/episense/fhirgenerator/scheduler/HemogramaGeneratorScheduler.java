@@ -42,10 +42,19 @@ public class HemogramaGeneratorScheduler {
                     random.nextInt(schedulerProperties.getMaxBatchSize() - schedulerProperties.getMinBatchSize() + 1);
 
             log.info("===== Starting hemograma generation batch =====");
-            log.info("Batch size: {} hemogramas", batchSize);
+            
+            // 10% chance to generate an anomaly batch (Outbreak)
+            boolean isOutbreak = random.nextDouble() < 0.10;
+            List<Hemograma> hemogramas;
 
-            // Gerar e salvar no ScyllaDB
-            List<Hemograma> hemogramas = hemogramaService.generateBatch(batchSize);
+            if (isOutbreak) {
+                log.warn("⚠⚠⚠ TRIGGERING ANOMALY OUTBREAK BATCH ⚠⚠⚠");
+                // Generate outbreak for Sao Paulo with 80% anomaly rate
+                hemogramas = hemogramaService.generateOutbreak("Sao Paulo|SP", batchSize, 0.8);
+            } else {
+                log.info("Generating normal batch of {} hemogramas", batchSize);
+                hemogramas = hemogramaService.generateBatch(batchSize);
+            }
             log.info("Generated and saved {} hemogramas to ScyllaDB", hemogramas.size());
 
             // Enviar para API externa

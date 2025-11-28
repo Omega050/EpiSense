@@ -16,6 +16,7 @@ public class HemogramaData {
     private String patientId;
     private String patientName;
     private String city;                 // Cidade
+    private String state;                // Estado (UF)
     private LocalDateTime collectionDate;
     
     // Eritrograma
