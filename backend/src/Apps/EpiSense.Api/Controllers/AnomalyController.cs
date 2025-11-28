@@ -53,10 +53,10 @@ public class AnomalyController : ControllerBase
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, 
+            _logger.LogError(ex,
                 "Erro ao executar análise manual: Município={MunicipioIbge}, Flag={Flag}",
                 municipioIbge, flag);
-            
+
             return StatusCode(500, new { error = "Erro ao executar análise", details = ex.Message });
         }
     }
@@ -72,7 +72,7 @@ public class AnomalyController : ControllerBase
     public IActionResult TriggerAnalysis()
     {
         _logger.LogInformation("Execução manual do job Shewhart solicitada via API");
-        
+
         // Executa em background task para não bloquear resposta HTTP
         _ = Task.Run(async () =>
         {
@@ -88,8 +88,8 @@ public class AnomalyController : ControllerBase
             }
         });
 
-        return Accepted(new 
-        { 
+        return Accepted(new
+        {
             message = "Análise Shewhart iniciada em background",
             timestamp = DateTime.UtcNow
         });
@@ -126,6 +126,97 @@ public class AnomalyController : ControllerBase
                 consolidatedData = "D-2 (Shewhart target)",
                 historicalBaseline = "D-3 to D-62 (60 days)"
             }
+        });
+    }
+
+    /// <summary>
+    /// Força execução imediata do job de agregação para popular cache diário.
+    /// Deve ser executado antes da análise Shewhart para garantir dados atualizados.
+    /// </summary>
+    /// <param name="days">Número de dias a agregar (padrão: 90)</param>
+    /// <returns>Mensagem de confirmação</returns>
+    [HttpPost("trigger-aggregation")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    public IActionResult TriggerAggregation([FromQuery] int days = 90)
+    {
+        _logger.LogInformation("Execução manual do job de agregação solicitada via API para {Days} dias", days);
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var aggregationJob = scope.ServiceProvider.GetRequiredService<AggregationJob>();
+
+                // Agrega dados para os últimos N dias
+                for (int i = 2; i <= days; i++)
+                {
+                    var targetDate = DateTime.UtcNow.Date.AddDays(-i);
+                    _logger.LogInformation("Agregando D-{Offset}: {Date:yyyy-MM-dd}", i, targetDate);
+
+                    var aggregationService = scope.ServiceProvider.GetRequiredService<Analysis.Services.AggregationService>();
+                    await aggregationService.UpdateDailyAggregationsAsync(targetDate);
+                }
+
+                _logger.LogInformation("✅ Agregação completa para {Days} dias", days);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao executar agregação manual");
+            }
+        });
+
+        return Accepted(new
+        {
+            message = $"Agregação iniciada em background para {days} dias",
+            timestamp = DateTime.UtcNow
+        });
+    }
+
+    /// <summary>
+    /// Executa agregação + análise Shewhart em sequência.
+    /// Útil para testes e validação do sistema completo.
+    /// </summary>
+    [HttpPost("trigger-full-analysis")]
+    [ProducesResponseType(StatusCodes.Status202Accepted)]
+    public IActionResult TriggerFullAnalysis([FromQuery] int aggregationDays = 90)
+    {
+        _logger.LogInformation("Execução completa solicitada: Agregação + Shewhart");
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+
+                // 1. Agregação
+                _logger.LogInformation("📊 Fase 1: Agregação de {Days} dias...", aggregationDays);
+                var aggregationService = scope.ServiceProvider.GetRequiredService<Analysis.Services.AggregationService>();
+
+                for (int i = 2; i <= aggregationDays; i++)
+                {
+                    var targetDate = DateTime.UtcNow.Date.AddDays(-i);
+                    await aggregationService.UpdateDailyAggregationsAsync(targetDate);
+                }
+                _logger.LogInformation("✅ Agregação concluída");
+
+                // 2. Análise Shewhart
+                _logger.LogInformation("🔬 Fase 2: Análise Shewhart...");
+                var shewhartJob = scope.ServiceProvider.GetRequiredService<ShewhartAnalysisJob>();
+                await shewhartJob.ExecuteAsync();
+                _logger.LogInformation("✅ Análise Shewhart concluída");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao executar análise completa");
+            }
+        });
+
+        return Accepted(new
+        {
+            message = "Análise completa (Agregação + Shewhart) iniciada em background",
+            aggregationDays,
+            timestamp = DateTime.UtcNow
         });
     }
 }

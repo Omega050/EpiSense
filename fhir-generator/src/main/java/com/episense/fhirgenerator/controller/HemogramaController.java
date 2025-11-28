@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +19,7 @@ public class HemogramaController {
     
     private final HemogramaService hemogramaService;
     private final com.episense.fhirgenerator.service.ExternalApiService externalApiService;
-    
+
     @GetMapping("/patient/{patientId}")
     public ResponseEntity<List<Hemograma>> getHemogramasByPatient(
             @PathVariable String patientId) {
@@ -93,7 +92,7 @@ public class HemogramaController {
             
             // 2. Generate outbreak for D-2 (Target date of Shewhart Job)
             // The job analyzes D-2 to ensure data consolidation. To test immediately, we must inject data in the past.
-            LocalDateTime targetDate = LocalDateTime.now().minusDays(2);
+            java.time.LocalDateTime targetDate = java.time.LocalDateTime.now().minusDays(2);
             hemogramaService.generateOutbreak(city, outbreakDailyCount, 0.9, targetDate); 
             
             // 3. Force send data to API immediately
@@ -107,5 +106,4 @@ public class HemogramaController {
             return ResponseEntity.status(500).body("Error: " + e.getMessage());
         }
     }
-    
 }
