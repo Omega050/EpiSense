@@ -15,6 +15,8 @@ public class HemogramaData {
     
     private String patientId;
     private String patientName;
+    private String city;                 // Cidade
+    private String state;                // Estado (UF)
     private LocalDateTime collectionDate;
     
     // Eritrograma
@@ -27,8 +29,9 @@ public class HemogramaData {
     private Double rdw;                  // RDW - Red Cell Distribution Width (%)
     
     // Leucograma
-    private Double whiteBloodCells;      // Leucócitos (mil/mm³)
-    private Double neutrophils;          // Neutrófilos (%)
+    private Double whiteBloodCells;      // Leucócitos (células/µL)
+    private Double neutrophils;          // Neutrófilos (células/µL)
+    private Double neutrophilsBandForm;  // Bastonetes (células/µL)
     private Double lymphocytes;          // Linfócitos (%)
     private Double monocytes;            // Monócitos (%)
     private Double eosinophils;          // Eosinófilos (%)

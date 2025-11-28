@@ -1,0 +1,142 @@
+@startuml shewhart-architecture
+!define RECTANGLE class
+
+skinparam backgroundColor #FEFEFE
+skinparam component {
+    BackgroundColor<<fresh>> #E8F5E9
+    BackgroundColor<<consolidated>> #FFF3E0
+    BackgroundColor<<analysis>> #E3F2FD
+    BackgroundColor<<job>> #F3E5F5
+    BorderColor #424242
+}
+
+title Arquitetura de Análise Shewhart - EpiSense
+
+package "Ingestão FHIR (24/7)" as ingestion {
+    [FHIR Server] as fhir
+    [IngestionService] as ingest
+    database "MongoDB\nRaw Data" as mongo
+}
+
+package "Análise Individual (Tempo Real)" as individual {
+    [FhirAnalysisService] as analysis
+    database "PostgreSQL\nObservation Summaries" as postgres
+    note right of analysis
+        Detecta flags:
+        - SIB_SUSPEITA
+        - SIB_GRAVE
+        - LEUCOCITOSE
+        - NEUTROFILIA
+        - DESVIO_ESQUERDA
+    end note
+}
+
+package "Janela Temporal D-2" as temporal {
+    rectangle "D-0, D-1\nDados Frescos" <<fresh>> as fresh {
+        note as n1
+            Status: Em processamento
+            Uso: Consultas individuais
+            Análise: Tempo real
+        end note
+    }
+    
+    rectangle "D-2\nTarget Date" <<consolidated>> as target {
+        note as n2
+            Status: Consolidado
+            Uso: Análise Shewhart
+            Agregação: AggregationJob
+        end note
+    }
+    
+    rectangle "D-3 até D-62\nBaseline (60 dias)" <<consolidated>> as baseline {
+        note as n3
+            Status: Histórico estável
+            Uso: Cálculo μ, σ, UCL, LCL
+            Atualização: Diária (às 2h)
+        end note
+    }
+}
+
+package "Jobs Hangfire" as jobs {
+    [AggregationJob\nDaily at 02:00] <<job>> as aggJob
+    [ShewhartAnalysisJob\nEvery 2 hours] <<job>> as shewhartJob
+    
+    note right of aggJob
+        Agrega D-2:
+        - Conta casos por município + flag
+        - Gera série temporal
+        - Alimenta baseline
+    end note
+    
+    note right of shewhartJob
+        Para cada município + flag:
+        - Calcula baseline (D-62 a D-3)
+        - Analisa target (D-2)
+        - Detecta anomalias (μ ± 3σ)
+    end note
+}
+
+package "Análise Estatística" as statistical {
+    [ShewhartAnalyzer] <<analysis>> as shewhart
+    [AggregationService] as aggService
+    
+    note right of shewhart
+        Algoritmo:
+        1. GetDailyCases (D-62 a D-3)
+        2. CalculateBaseline (μ, σ)
+        3. DetectAnomaly (target vs UCL/LCL)
+        4. CalculateSeverity (desvio em σ)
+    end note
+}
+
+package "API REST" as api {
+    [AnomalyController] as controller
+    
+    note right of controller
+        Endpoints:
+        - GET /api/anomaly/analyze/{ibge}/{flag}
+        - POST /api/anomaly/trigger-analysis
+        - GET /api/anomaly/config
+    end note
+}
+
+package "Resultados" as results {
+    database "PostgreSQL\nShewhart Results" as resultsDb
+    [Hangfire Dashboard\n/hangfire] as dashboard
+    
+    note right of resultsDb
+        Anomalias detectadas:
+        - Município, Flag, Data
+        - Valor observado
+        - Baseline (μ, σ, UCL, LCL)
+        - Tipo (Increase/Decrease)
+        - Severidade (Low/Medium/High/Critical)
+    end note
+}
+
+' === FLUXO DE DADOS ===
+fhir --> ingest : POST /ingest\n(FHIR Bundle)
+ingest --> mongo : Salva raw
+ingest ..> analysis : Hangfire Job
+analysis --> postgres : ObservationSummary\n(com flags)
+
+postgres --> fresh : D-0, D-1
+postgres --> target : D-2
+postgres --> baseline : D-3 a D-62
+
+aggJob --> aggService : UpdateDaily\nAggregations(D-2)
+aggService --> postgres : Lê summaries
+aggService --> baseline : Atualiza agregações
+
+shewhartJob --> shewhart : AnalyzeAsync()
+shewhart --> baseline : GetDailyCases(D-62 a D-3)
+shewhart --> target : GetDailyCases(D-2)
+shewhart --> resultsDb : ShewhartResult\n(se anomalia)
+
+controller --> shewhartJob : Manual trigger
+controller <-- resultsDb : Query anomalias
+
+shewhartJob --> dashboard : Job status
+aggJob --> dashboard : Job status
+
+@enduml

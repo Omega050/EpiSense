@@ -41,4 +41,9 @@ public interface IAnalysisRepository
     /// Conta casos com flags específicas em um município
     /// </summary>
     Task<int> CountByMunicipioAndFlagsAsync(string codigoIbge, string[] flags, DateTime startDate, DateTime endDate);
+    
+    /// <summary>
+    /// Busca agregações diárias para análise Shewhart (dados já consolidados com peso correto)
+    /// </summary>
+    Task<IEnumerable<DailyCaseAggregation>> GetDailyAggregationsAsync(string municipioIbge, string flag, DateTime startDate, DateTime endDate);
 }

@@ -11,6 +11,7 @@ RUN dotnet restore src/Apps/EpiSense.Api/EpiSense.Api.csproj
 COPY src/Apps/EpiSense.Api/ src/Apps/EpiSense.Api/
 COPY src/Contexts/EpiSense.Analysis/ src/Contexts/EpiSense.Analysis/
 COPY src/Contexts/EpiSense.Alerts/ src/Contexts/EpiSense.Alerts/
+COPY src/Contexts/EpiSense.Ingestion/ src/Contexts/EpiSense.Ingestion/
 WORKDIR /src/src/Apps/EpiSense.Api
 RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 

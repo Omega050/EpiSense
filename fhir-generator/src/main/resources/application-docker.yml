@@ -9,6 +9,21 @@ external:
   api:
     url: http://fhir-server:8081/api/fhir
 
+# Anomaly Generation Configuration (Docker environment)
+# Can be overridden via environment variables:
+# EPISENSE_ANOMALY_ENABLED, EPISENSE_ANOMALY_PERCENTAGE, etc.
+episense:
+  anomaly:
+    enabled: true
+    percentage: 0.25
+    severe-ratio: 0.30
+    outbreak-cities:
+      - "Trindade|GO"
+      - "Goiania|GO"
+    burst-probability: 0.20
+    burst-anomaly-rate: 0.80
+    burst-size-multiplier: 3.0
+
 logging:
   level:
     root: INFO
